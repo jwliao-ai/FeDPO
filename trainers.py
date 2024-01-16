@@ -1,4 +1,5 @@
 import torch
+import copy
 
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn.functional as F
@@ -542,6 +543,9 @@ class BasicTrainer(object):
                     f'skipping logging after {self.example_counter} examples to avoid logging too frequently'
                 )
             #### END TRAINING ####
+
+    def get_policy_params(self):
+        return copy.deepcopy(self.policy.state_dict())
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""

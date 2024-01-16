@@ -35,25 +35,39 @@ class FedAvgAPI(object):
         logging.info("############setup_clients (START)#############")
         for client_idx in range(self.config.client_num_in_total):
             TrainerClass = getattr(trainers, self.config.trainer)
-            trainer = TrainerClass(local_policies[client_idx],
-                                   self.config,
-                                   self.config.seed,
-                                   self.config.local_run_dir,
-                                   reference_model=self.reference_model,
-                                   rank=self.rank,
-                                   world_size=self.world_size)
             c = Client(client_idx, local_train_data[client_idx],
-                       local_test_data[client_idx], self.config, self.device,
-                       trainer, local_policies[client_idx])
+                       local_test_data[client_idx], self.config, TrainerClass,
+                       local_policies[client_idx])
             self.client_list.append(c)
         logging.info("############setup_clients (END)#############")
 
     def _aggregate(self, w_locals):
         return agg_FedAvg(w_locals)
 
+    def train(self):
+        for round_idx in range(self.config.comm_round):
+            logging.info(
+                "##################Communication round: {}".format(round_idx))
+
+            w_locals = []
+
+            for idx, client in enumerate(self.client_list):
+                w = client.train()
+                # we first suppose data is evenly distributed
+                w_locals.append((1, copy.deepcopy(w)))
+
+            w_global = self._aggregate(w_locals)
+
+            self.policy_global.load_state_dict(copy.deepcopy(w_global))
+
+            for idx, client in enumerate(self.client_list):
+                client.policy.load_state_dict(copy.deepcopy(w_global))
+
+            if round_idx == self.config.comm_round - 1:
+                self._global_test(round_idx)
+            elif round_idx % self.config.frequency_of_the_test == 0:
+                self._global_test(round_idx)
+
     def _global_test(self, round_idx):
 
         logging.info("################global_test : {}".format(round_idx))
-
-    def train(self):
-        w_global = self.model_trainer.getmo

@@ -123,3 +123,5 @@ def main(config: DictConfig):
     fedavgAPI = FedAvgAPI(local_train_data, global_train_data, local_test_data,
                           global_test_data, config, global_policy,
                           local_policies, reference_model)
+
+    fedavgAPI.train()
