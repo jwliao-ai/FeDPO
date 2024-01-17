@@ -372,6 +372,104 @@ class BasicTrainer(object):
 
         return losses.mean(), metrics
 
+    def test(self):
+        torch.manual_seed(self.seed)
+        np.random.seed(self.seed)
+        random.seed(self.seed)
+
+        if self.config.loss.name in {'dpo', 'ipo'}:
+            self.reference_model.eval()
+
+        self.example_counter = 0
+        self.batch_counter = 0
+        last_log = None
+
+        rank0_print(f'Only running evaluation')
+        self.policy.eval()
+
+        all_eval_metrics = defaultdict(list)
+        if self.config.sample_during_eval:
+            all_policy_samples, all_reference_samples = [], []
+            policy_text_table = wandb.Table(
+                columns=["step", "prompt", "sample"])
+            if self.config.loss.name in {'dpo', 'ipo'}:
+                reference_text_table = wandb.Table(
+                    columns=["step", "prompt", "sample"])
+
+        for eval_batch in (tqdm.tqdm(self.eval_batches,
+                                     desc='Computing eval metrics')
+                           if self.rank == 0 else self.eval_batches):
+            local_eval_batch = slice_and_move_batch_for_device(
+                eval_batch, self.rank, self.world_size, self.rank)
+            with torch.no_grad():
+                _, eval_metrics = self.get_batch_metrics(local_eval_batch,
+                                                         self.config.loss,
+                                                         train=False)
+
+        for k, v in eval_metrics.items():
+            all_eval_metrics[k].extend(v)
+
+        if self.config.sample_during_eval:
+            rank0_print(
+                f'Warning: n_eval_model_samples ({self.config.n_eval_model_samples}) < eval_batch_size ({self.config.eval_batch_size}). Sampling from the first complete eval batch of prompts.'
+            )
+            sample_batches = self.eval_batches[:1]
+        else:
+            n_sample_batches = self.config.n_eval_model_samples // self.config.eval_batch_size
+            sample_batches = self.eval_batches[:n_sample_batches]
+
+        for eval_batch in (tqdm.tqdm(sample_batches,
+                                     desc='Generating samples...')
+                           if self.rank == 0 else sample_batches):
+            local_eval_batch = slice_and_move_batch_for_device(
+                eval_batch, self.rank, self.world_size, self.rank)
+            policy_samples, reference_samples = self.get_batch_samples(
+                local_eval_batch)
+
+        all_policy_samples.extend(policy_samples)
+        all_reference_samples.extend(reference_samples)
+
+        for prompt, sample in zip(eval_batch['prompt'], policy_samples):
+            policy_text_table.add_data(self.example_counter, prompt, sample)
+
+        if self.config.loss.name in {'dpo', 'ipo'}:
+            for prompt, sample in zip(eval_batch['prompt'], reference_samples):
+                reference_text_table.add_data(self.example_counter, prompt,
+                                              sample)
+
+        mean_eval_metrics = {
+            k: sum(v) / len(v)
+            for k, v in all_eval_metrics.items()
+        }
+
+        rank0_print(
+            f'eval after {self.example_counter}: {formatted_dict(mean_eval_metrics)}'
+        )
+
+        if self.config.sample_during_eval:
+            rank0_print(json.dumps(all_policy_samples[:10], indent=2))
+            if self.config.loss.name in {'dpo', 'ipo'}:
+                rank0_print(json.dumps(all_reference_samples[:10], indent=2))
+
+        if self.config.wandb.enabled and self.rank == 0:
+            wandb.log(mean_eval_metrics, step=self.example_counter)
+
+            if self.config.sample_during_eval:
+                wandb.log({"policy_samples": policy_text_table},
+                          step=self.example_counter)
+                if self.config.loss.name in {'dpo', 'ipo'}:
+                    wandb.log({"reference_samples": reference_text_table},
+                              step=self.example_counter)
+
+        if self.example_counter > 0:
+            if self.config.debug:
+                rank0_print('skipping save in debug mode')
+            else:
+                output_dir = os.path.join(self.run_dir,
+                                          f'step-{self.example_counter}')
+                rank0_print(f'creating checkpoint to write to {output_dir}...')
+                self.save(output_dir, mean_eval_metrics)
+
     def train(self):
         """Begin either SFT or DPO training, with periodic evaluation."""
 
