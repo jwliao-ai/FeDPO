@@ -71,3 +71,13 @@ class FedAvgAPI(object):
     def _global_test(self, round_idx):
 
         logging.info("################global_test : {}".format(round_idx))
+
+        TrainerClass = getattr(trainers, self.config.trainer)
+        trainer = TrainerClass(self.policy_global,
+                               self.config,
+                               self.config.seed,
+                               self.config.local_run_dir,
+                               reference_model=self.reference_model,
+                               rank=self.rank,
+                               world_size=self.world_size)
+        trainer.test()
