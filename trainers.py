@@ -642,9 +642,6 @@ class BasicTrainer(object):
                 )
             #### END TRAINING ####
 
-    def get_policy_params(self):
-        return copy.deepcopy(self.policy.state_dict())
-
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
         return torch.nn.utils.clip_grad_norm_(

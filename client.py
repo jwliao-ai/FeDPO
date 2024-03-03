@@ -15,6 +15,7 @@ import json
 import socket
 from typing import Optional, Set
 import resource
+import copy
 
 
 class Client:
@@ -30,29 +31,57 @@ class Client:
         self.policy = policy
         self.TrainerClass = TrainerClass
 
-    def train(self):
+    def train(self, reference_model: Optional[nn.Module] = None):
+        if 'FSDP' in self.config.trainer:
+            world_size = torch.cuda.device_count()
+            print('starting', world_size, 'processes for FSDP training')
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+            print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
+            mp.spawn(self.worker_main,
+                     nprocs=world_size,
+                     args=(world_size, reference_model),
+                     join=True)
+        else:
+            print('starting single-process worker')
+            self.worker_main(0, 1, reference_model)
+
+    def worker_main(self,
+                    rank: int,
+                    world_size: int,
+                    reference_model: Optional[nn.Module] = None):
+        """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
+        if 'FSDP' in self.config.trainer:
+            init_distributed(rank, world_size, port=self.config.fsdp_port)
+
+        if self.config.debug:
+            wandb.init = lambda *args, **kwargs: None
+            wandb.log = lambda *args, **kwargs: None
+
+        if rank == 0 and self.config.wandb.enabled:
+            os.environ['WANDB_CACHE_DIR'] = get_local_dir(
+                self.config.local_dirs)
+            wandb.init(
+                entity=self.config.wandb.entity,
+                project=self.config.wandb.project,
+                config=OmegaConf.to_container(self.config),
+                dir=get_local_dir(self.config.local_dirs),
+                name=self.config.exp_name,
+            )
+
+        print(
+            f'Creating trainer on process {rank} with world size {world_size}')
+
         trainer = self.TrainerClass(self.policy,
                                     self.config,
                                     self.config.seed,
                                     self.config.local_run_dir,
-                                    reference_model=self.reference_model,
-                                    rank=self.rank,
-                                    world_size=self.world_size)
+                                    reference_model=reference_model,
+                                    rank=rank,
+                                    world_size=world_size)
+
         trainer.train()
         trainer.save()
-        return trainer.get_policy_params()
-  
-    def worker_main(self,
-                    rank: int,
-                    world_size: int,
-                    config: DictConfig,
-                    policy: nn.Module,
-                    reference_model: Optional[nn.Module] = None):
-        """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
-        if 'FSDP' in config.trainer:
-            init_distributed(rank, world_size, port=config.fsdp_port)
 
-        if config.debug:
-            wandb.init = lambda *args, **kwargs: None
-            wandb.log = lambda *args, **kwargs: None
-
+    def get_policy_params(self):
+        return copy.deepcopy(self.policy.state_dict())

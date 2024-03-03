@@ -52,9 +52,9 @@ class FedAvgAPI(object):
             w_locals = []
 
             for idx, client in enumerate(self.client_list):
-                w = client.train()
+                client.train()
                 # we first suppose data is evenly distributed
-                w_locals.append((1, copy.deepcopy(w)))
+                w_locals.append((1, copy.deepcopy(client.get_policy_params())))
 
             w_global = self._aggregate(w_locals)
 
@@ -81,3 +81,4 @@ class FedAvgAPI(object):
                                rank=self.rank,
                                world_size=self.world_size)
         trainer.test()
+        trainer.save()
