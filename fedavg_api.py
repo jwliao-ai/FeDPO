@@ -10,6 +10,14 @@ import trainers
 from client import Client
 from agg import agg_FedAvg
 
+from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
+import torch.nn as nn
+import os
+from omegaconf import OmegaConf, DictConfig
+from typing import Optional, Set
+import resource
+import torch.multiprocessing as mp
+
 
 class FedAvgAPI(object):
 
@@ -19,6 +27,11 @@ class FedAvgAPI(object):
         self.config = config
         self.train_data_global = global_train_data
         self.test_data_global = global_test_data
+
+        self.data_global = {
+            "train": global_train_data,
+            "test": global_test_data
+        }
 
         self.policy_global = global_policy
 
@@ -52,10 +65,12 @@ class FedAvgAPI(object):
             w_locals = []
 
             for idx, client in enumerate(self.client_list):
+                print("##########Client {} training".format(idx))
                 client.train(self.reference_model)
                 # we first suppose data is evenly distributed
                 w_locals.append((1, copy.deepcopy(client.get_policy_params())))
 
+            print("Aggregation begins")
             w_global = self._aggregate(w_locals)
 
             self.policy_global.load_state_dict(copy.deepcopy(w_global))
@@ -72,13 +87,54 @@ class FedAvgAPI(object):
 
         logging.info("################global_test : {}".format(round_idx))
 
-        TrainerClass = getattr(trainers, self.config.trainer)
-        trainer = TrainerClass(self.policy_global,
-                               self.config,
-                               self.config.seed,
-                               self.config.local_run_dir,
-                               reference_model=self.reference_model,
-                               rank=self.rank,
-                               world_size=self.world_size)
+        if 'FSDP' in self.config.trainer:
+            world_size = torch.cuda.device_count()
+            print('starting', world_size, 'processes for FSDP training')
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+            print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
+            mp.spawn(self.worker_main,
+                     nprocs=world_size,
+                     args=(world_size, self.reference_model),
+                     join=True)
+        else:
+            print('starting single-process worker')
+            self.worker_main(0, 1, self.reference_model)
+
+    def worker_main(self,
+                    rank: int,
+                    world_size: int,
+                    reference_model: Optional[nn.Module] = None):
+        """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
+        if 'FSDP' in self.config.trainer:
+            init_distributed(rank, world_size, port=self.config.fsdp_port)
+
+        if self.config.debug:
+            wandb.init = lambda *args, **kwargs: None
+            wandb.log = lambda *args, **kwargs: None
+
+        if rank == 0 and self.config.wandb.enabled:
+            os.environ['WANDB_CACHE_DIR'] = get_local_dir(
+                self.config.local_dirs)
+            wandb.init(
+                entity=self.config.wandb.entity,
+                project=self.config.wandb.project,
+                config=OmegaConf.to_container(self.config),
+                dir=get_local_dir(self.config.local_dirs),
+                name=self.config.exp_name,
+            )
+
+        print(
+            f'Creating trainer on process {rank} with world size {world_size}')
+
+        trainer = self.TrainerClass(self.policy_global,
+                                    self.config,
+                                    self.config.seed,
+                                    self.config.local_run_dir,
+                                    dataset=self.data_global,
+                                    reference_model=reference_model,
+                                    rank=rank,
+                                    world_size=world_size)
+
         trainer.test()
         trainer.save()
