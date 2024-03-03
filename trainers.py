@@ -590,7 +590,8 @@ class BasicTrainer(object):
                             f'creating checkpoint to write to {output_dir}...')
                         self.save(output_dir, mean_eval_metrics)
 
-                if self.example_counter > 19999:
+                
+                if self.config.debug == True and (self.example_counter % self.config.eval_every == 0):
                     return
             #### END EVALUATION ####
 

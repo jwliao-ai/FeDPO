@@ -127,7 +127,8 @@ class FedAvgAPI(object):
         print(
             f'Creating trainer on process {rank} with world size {world_size}')
 
-        trainer = self.TrainerClass(self.policy_global,
+        TrainerClass = getattr(trainers, self.config.trainer)
+        trainer = TrainerClass(self.policy_global,
                                     self.config,
                                     self.config.seed,
                                     self.config.local_run_dir,
