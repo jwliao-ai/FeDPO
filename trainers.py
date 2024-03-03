@@ -700,7 +700,8 @@ class FSDPTrainer(BasicTrainer):
                  run_dir: str,
                  reference_model: Optional[nn.Module] = None,
                  rank: int = 0,
-                 world_size: int = 1):
+                 world_size: int = 1,
+                 dataset: Dict = None):
         """A trainer subclass that uses PyTorch FSDP to shard the model across multiple GPUs.
         
            This trainer will shard both the policy and reference model across all available GPUs.
@@ -708,7 +709,7 @@ class FSDPTrainer(BasicTrainer):
         """
 
         super().__init__(policy, config, seed, run_dir, reference_model, rank,
-                         world_size)
+                         world_size, dataset)
         assert config.model.block_name is not None, 'must specify model.block_name (e.g., GPT2Block or GPTNeoXLayer) for FSDP'
 
         wrap_class = get_block_class_from_model(policy,
