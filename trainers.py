@@ -168,10 +168,10 @@ class BasicTrainer(object):
                  config: DictConfig,
                  seed: int,
                  run_dir: str,
+                 dataset: Dict,
                  reference_model: Optional[nn.Module] = None,
                  rank: int = 0,
-                 world_size: int = 1,
-                 dataset: Dict = None):
+                 world_size: int = 1):
         """A trainer for a language model, supporting either SFT or DPO training.
            
            If multiple GPUs are present, naively splits the model across them, effectively
@@ -698,18 +698,18 @@ class FSDPTrainer(BasicTrainer):
                  config: DictConfig,
                  seed: int,
                  run_dir: str,
+                 dataset: Dict,
                  reference_model: Optional[nn.Module] = None,
                  rank: int = 0,
-                 world_size: int = 1,
-                 dataset: Dict = None):
+                 world_size: int = 1):
         """A trainer subclass that uses PyTorch FSDP to shard the model across multiple GPUs.
         
            This trainer will shard both the policy and reference model across all available GPUs.
            Models are sharded at the block level, where the block class name is provided in the config.
         """
 
-        super().__init__(policy, config, seed, run_dir, reference_model, rank,
-                         world_size, dataset)
+        super().__init__(policy, config, seed, run_dir, dataset,
+                         reference_model, rank, world_size)
         assert config.model.block_name is not None, 'must specify model.block_name (e.g., GPT2Block or GPTNeoXLayer) for FSDP'
 
         wrap_class = get_block_class_from_model(policy,

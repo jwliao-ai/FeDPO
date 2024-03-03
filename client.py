@@ -76,10 +76,10 @@ class Client:
                                     self.config,
                                     self.config.seed,
                                     self.config.local_run_dir,
+                                    dataset=self.data,
                                     reference_model=reference_model,
                                     rank=rank,
-                                    world_size=world_size,
-                                    dataset=self.data)
+                                    world_size=world_size)
 
         trainer.train()
         trainer.save()
