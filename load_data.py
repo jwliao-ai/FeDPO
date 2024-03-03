@@ -164,7 +164,7 @@ def get_hh(
        For this dataset, the sft_target is just the chosen response.
     """
     print(f'Loading HH dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('Anthropic/hh-rlhf',
+    dataset = datasets.load_dataset('../autodl-tmp/hh-rlhf',
                                     split=split,
                                     cache_dir=cache_dir)
     print('done')

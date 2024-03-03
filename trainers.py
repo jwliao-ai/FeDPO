@@ -589,6 +589,9 @@ class BasicTrainer(object):
                         rank0_print(
                             f'creating checkpoint to write to {output_dir}...')
                         self.save(output_dir, mean_eval_metrics)
+
+                if self.example_counter > 19999:
+                    return
             #### END EVALUATION ####
 
             #### BEGIN TRAINING ####

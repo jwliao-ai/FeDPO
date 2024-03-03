@@ -52,7 +52,7 @@ class FedAvgAPI(object):
             w_locals = []
 
             for idx, client in enumerate(self.client_list):
-                client.train()
+                client.train(self.reference_model)
                 # we first suppose data is evenly distributed
                 w_locals.append((1, copy.deepcopy(client.get_policy_params())))
 

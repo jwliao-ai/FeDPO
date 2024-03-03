@@ -4,6 +4,9 @@ client_num_in_total: 2
 # frequency of communication
 comm_round: 5
 
+# frequency of test
+frequency_of_the_test: 2
+
 # random seed for batch sampling
 seed: 0
 
