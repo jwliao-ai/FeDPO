@@ -23,8 +23,8 @@ class Client:
     def __init__(self, client_idx, local_train_data, local_eval_data, config,
                  TrainerClass, policy) -> None:
         self.client_idx = client_idx
-        self.local_train_data = local_train_data
-        self.local_eval_data = local_eval_data
+
+        self.data = {"train": local_train_data, "test": local_eval_data}
 
         self.config = config
 
@@ -78,7 +78,8 @@ class Client:
                                     self.config.local_run_dir,
                                     reference_model=reference_model,
                                     rank=rank,
-                                    world_size=world_size)
+                                    world_size=world_size,
+                                    dataset=self.data)
 
         trainer.train()
         trainer.save()

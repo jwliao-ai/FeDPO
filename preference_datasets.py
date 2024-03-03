@@ -192,7 +192,8 @@ def get_batch_iterator(names: List[str],
         flat_data = []
         for name in names:
             truncation_mode = 'keep_end' if name == 'hh' else 'keep_start'
-            for prompt, data in dataset.items():
+            data = dataset["train"] if split == 'train' else dataset["test"]
+            for prompt, data in data.items():
                 flat_data.append((prompt, data['responses'], data['pairs'],
                                   data['sft_target'], truncation_mode))
 

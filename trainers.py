@@ -170,7 +170,8 @@ class BasicTrainer(object):
                  run_dir: str,
                  reference_model: Optional[nn.Module] = None,
                  rank: int = 0,
-                 world_size: int = 1):
+                 world_size: int = 1,
+                 dataset: Dict = None):
         """A trainer for a language model, supporting either SFT or DPO training.
            
            If multiple GPUs are present, naively splits the model across them, effectively
@@ -181,6 +182,7 @@ class BasicTrainer(object):
         self.world_size = world_size
         self.config = config
         self.run_dir = run_dir
+        self.dataset = dataset
 
         tokenizer_name_or_path = config.model.tokenizer_name_or_path or config.model.name_or_path
         rank0_print(f'Loading tokenizer {tokenizer_name_or_path}')
@@ -208,7 +210,8 @@ class BasicTrainer(object):
                                                  batch_size=config.batch_size,
                                                  silent=rank != 0,
                                                  cache_dir=get_local_dir(
-                                                     config.local_dirs))
+                                                     config.local_dirs),
+                                                 dataset=self.dataset)
         rank0_print(f'Loaded train data iterator')
         self.eval_iterator = get_batch_iterator(
             **data_iterator_kwargs,
@@ -216,7 +219,8 @@ class BasicTrainer(object):
             n_examples=config.n_eval_examples,
             batch_size=config.eval_batch_size,
             silent=rank != 0,
-            cache_dir=get_local_dir(config.local_dirs))
+            cache_dir=get_local_dir(config.local_dirs),
+            dataset=self.dataset)
         self.eval_batches = list(self.eval_iterator)
         rank0_print(
             f'Loaded {len(self.eval_batches)} eval batches of size {config.eval_batch_size}'
