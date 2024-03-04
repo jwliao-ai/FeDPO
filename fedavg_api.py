@@ -58,6 +58,7 @@ class FedAvgAPI(object):
         return agg_FedAvg(w_locals)
 
     def train(self):
+
         for round_idx in range(self.config.comm_round):
             logging.info(
                 "##################Communication round: {}".format(round_idx))
@@ -70,7 +71,6 @@ class FedAvgAPI(object):
                 # we first suppose data is evenly distributed
                 w_locals.append((1, copy.deepcopy(client.get_policy_params())))
 
-            print("Aggregation begins")
             w_global = self._aggregate(w_locals)
 
             self.policy_global.load_state_dict(copy.deepcopy(w_global))
@@ -129,13 +129,13 @@ class FedAvgAPI(object):
 
         TrainerClass = getattr(trainers, self.config.trainer)
         trainer = TrainerClass(self.policy_global,
-                                    self.config,
-                                    self.config.seed,
-                                    self.config.local_run_dir,
-                                    dataset=self.data_global,
-                                    reference_model=reference_model,
-                                    rank=rank,
-                                    world_size=world_size)
+                               self.config,
+                               self.config.seed,
+                               self.config.local_run_dir,
+                               dataset=self.data_global,
+                               reference_model=reference_model,
+                               rank=rank,
+                               world_size=world_size)
 
         trainer.test()
         trainer.save()

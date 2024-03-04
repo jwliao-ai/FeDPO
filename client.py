@@ -81,8 +81,12 @@ class Client:
                                     rank=rank,
                                     world_size=world_size)
 
-        trainer.train()
+        w = trainer.train()
+        self.update_policy(w)
         trainer.save()
 
     def get_policy_params(self):
         return copy.deepcopy(self.policy.state_dict())
+
+    def update_policy(self, w):
+        self.policy.load_state_dict(copy.deepcopy(w))

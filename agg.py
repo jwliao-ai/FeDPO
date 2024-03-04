@@ -10,6 +10,8 @@ def agg_FedAvg(w_locals):
     FedAvg aggregation
     param w_locals: list of (sample_num, model_params)
     '''
+
+    print("Aggregation begins")
     training_num = 0
     for idx in range(len(w_locals)):
         (sample_num, averaged_params) = w_locals[idx]
