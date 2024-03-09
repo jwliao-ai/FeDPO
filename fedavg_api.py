@@ -45,14 +45,14 @@ class FedAvgAPI(object):
 
     def _setup_clients(self, local_train_data, local_test_data,
                        local_policies):
-        logging.info("############setup_clients (START)#############")
+        logging.info("############ setup_clients (START) #############")
         for client_idx in range(self.config.client_num_in_total):
             TrainerClass = getattr(trainers, self.config.trainer)
             c = Client(client_idx, local_train_data[client_idx],
                        local_test_data[client_idx], self.config, TrainerClass,
                        local_policies[client_idx])
             self.client_list.append(c)
-        logging.info("############setup_clients (END)#############")
+        logging.info("############ setup_clients (END) #############")
 
     def _aggregate(self, w_locals):
         return agg_FedAvg(w_locals)
@@ -61,18 +61,19 @@ class FedAvgAPI(object):
 
         for round_idx in range(self.config.comm_round):
             logging.info(
-                "##################Communication round: {}".format(round_idx))
+                "################## Communication round: {} ####################".format(round_idx))
 
             w_locals = []
 
             for idx, client in enumerate(self.client_list):
-                print("##########Client {} training".format(idx))
+                print("#################### Client {} training ####################".format(idx))
                 client.train(self.reference_model)
                 # we first suppose data is evenly distributed
                 w_locals.append((1, copy.deepcopy(client.get_policy_params())))
 
             w_global = self._aggregate(w_locals)
-
+            print(w_global)
+            
             self.policy_global.load_state_dict(copy.deepcopy(w_global))
 
             for idx, client in enumerate(self.client_list):
@@ -85,7 +86,7 @@ class FedAvgAPI(object):
 
     def _global_test(self, round_idx):
 
-        logging.info("################global_test : {}".format(round_idx))
+        logging.info("################ global_test : {} ####################".format(round_idx))
 
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()

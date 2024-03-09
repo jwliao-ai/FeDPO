@@ -666,7 +666,6 @@ class BasicTrainer(object):
                 )
             #### END TRAINING ####
 
-        return self.policy.state_dict()
 
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
