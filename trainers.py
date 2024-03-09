@@ -377,6 +377,15 @@ class BasicTrainer(object):
         return losses.mean(), metrics
 
     def test(self):
+        
+        rank0_print(f'Using {self.config.optimizer} optimizer')
+        self.optimizer = getattr(torch.optim, self.config.optimizer)(
+            self.policy.parameters(), lr=self.config.lr)
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(
+            self.optimizer,
+            lr_lambda=lambda step: min(1.0, (step + 1) /
+                                       (self.config.warmup_steps + 1)))
+        
         torch.manual_seed(self.seed)
         np.random.seed(self.seed)
         random.seed(self.seed)
@@ -499,6 +508,7 @@ class BasicTrainer(object):
         self.example_counter = 0
         self.batch_counter = 0
         last_log = None
+        earlystop = -1
 
         for batch in self.train_iterator:
             #### BEGIN EVALUATION ####
@@ -509,6 +519,8 @@ class BasicTrainer(object):
                 )
                 self.policy.eval()
 
+                earlystop += 1
+                
                 all_eval_metrics = defaultdict(list)
                 if self.config.sample_during_eval:
                     all_policy_samples, all_reference_samples = [], []
@@ -594,9 +606,9 @@ class BasicTrainer(object):
                             f'creating checkpoint to write to {output_dir}...')
                         self.save(output_dir, mean_eval_metrics)
 
-                if self.config.debug == True and (self.example_counter %
-                                                  self.config.eval_every == 0):
-                    return
+                if self.config.debug == True and earlystop >= 1:
+                    break
+                    
             #### END EVALUATION ####
 
             #### BEGIN TRAINING ####

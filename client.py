@@ -82,6 +82,11 @@ class Client:
                                     world_size=world_size)
 
         w = trainer.train()
+        print("w: ", type(w))
+        if w != self.policy.state_dict() and type(w) == type(self.policy.state_dict()):
+            print("policy updated")
+        else:
+            print("policy not updated")
         self.update_policy(w)
         trainer.save()
 
@@ -89,4 +94,4 @@ class Client:
         return copy.deepcopy(self.policy.state_dict())
 
     def update_policy(self, w):
-        self.policy.load_state_dict(copy.deepcopy(w))
+        self.policy.load_state_dict(w, strict=False)
