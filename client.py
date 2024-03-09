@@ -32,7 +32,7 @@ class Client:
         self.TrainerClass = TrainerClass
 
     def train(self, reference_model: Optional[nn.Module] = None):
-        print(self.policy.
+        print(self.policy.state_dict())
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
             print('starting', world_size, 'processes for FSDP training')
@@ -46,6 +46,7 @@ class Client:
         else:
             print('starting single-process worker')
             self.worker_main(0, 1, reference_model)
+        print(self.policy.state_dict())
 
     def worker_main(self,
                     rank: int,
