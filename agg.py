@@ -17,11 +17,10 @@ def agg_FedAvg(state_dicts):
 
     for state_dict in state_dicts:
         for key, value in state_dict.items():
-            if key in aggregated_state_dict:
-                aggregated_value = aggregated_state_dict[key] + value
-                aggregated_state_dict[key] = aggregated_value
-            else:
+            if key not in aggregated_state_dict:
                 aggregated_state_dict[key] = value
+            else:
+                aggregated_state_dict[key] = aggregated_state_dict[key] + value
 
     num_state_dicts = len(state_dicts)
     for key, value in aggregated_state_dict.items():

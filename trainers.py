@@ -164,6 +164,7 @@ def concatenated_inputs(
 class BasicTrainer(object):
 
     def __init__(self,
+                 client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
                  seed: int,
@@ -177,6 +178,7 @@ class BasicTrainer(object):
            If multiple GPUs are present, naively splits the model across them, effectively
            offering N times available memory, but without any parallel computation.
         """
+        self.client_idx = client_idx
         self.seed = seed
         self.rank = rank
         self.world_size = world_size
@@ -515,7 +517,7 @@ class BasicTrainer(object):
             if self.example_counter % self.config.eval_every == 0 and (
                     self.example_counter > 0 or self.config.do_first_eval):
                 rank0_print(
-                    f'Running evaluation after {self.example_counter} train examples'
+                    f'Running evaluation on client {self.client_idx} after {self.example_counter} train examples'
                 )
                 self.policy.eval()
 
@@ -601,7 +603,7 @@ class BasicTrainer(object):
                         rank0_print('skipping save in debug mode')
                     else:
                         output_dir = os.path.join(
-                            self.run_dir, f'step-{self.example_counter}')
+                            self.run_dir, f'{self.client_idx}-step-{self.example_counter}')
                         rank0_print(
                             f'creating checkpoint to write to {output_dir}...')
                         self.save(output_dir, mean_eval_metrics)
@@ -715,6 +717,7 @@ class BasicTrainer(object):
 class FSDPTrainer(BasicTrainer):
 
     def __init__(self,
+                 client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
                  seed: int,
@@ -729,7 +732,7 @@ class FSDPTrainer(BasicTrainer):
            Models are sharded at the block level, where the block class name is provided in the config.
         """
 
-        super().__init__(policy, config, seed, run_dir, dataset,
+        super().__init__(client_idx, policy, config, seed, run_dir, dataset,
                          reference_model, rank, world_size)
         assert config.model.block_name is not None, 'must specify model.block_name (e.g., GPT2Block or GPTNeoXLayer) for FSDP'
 

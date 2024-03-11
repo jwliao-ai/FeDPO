@@ -69,12 +69,13 @@ class FedAvgAPI(object):
                 print("#################### Client {} training ####################".format(idx))
                 client.train(self.reference_model)
                 # we first suppose data is evenly distributed
-                policy_dir = os.path.join(self.config.local_run_dir, f'LATEST', 'policy.pt')
-                state_dict = torch.load(policy_dir, map_location='cpu')
-                w_locals.append(state_dict)
+                # policy_dir = os.path.join(self.config.local_run_dir, f'LATEST', 'policy.pt')
+                # state_dict = torch.load(policy_dir, map_location='cpu')
+                # w_locals.append(copy.deepcopy(state_dict['state']))
+                w_locals.append(copy.deepcopy(client.policy.state_dict()))
 
             w_global = self._aggregate(w_locals)
-            print(w_global)
+            # print(w_global['transformer.ln_f.weight'])
             
             self.policy_global.load_state_dict(copy.deepcopy(w_global))
 
@@ -131,7 +132,8 @@ class FedAvgAPI(object):
             f'Creating trainer on process {rank} with world size {world_size}')
 
         TrainerClass = getattr(trainers, self.config.trainer)
-        trainer = TrainerClass(self.policy_global,
+        trainer = TrainerClass(999,
+                               self.policy_global,
                                self.config,
                                self.config.seed,
                                self.config.local_run_dir,
