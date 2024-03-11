@@ -3,30 +3,31 @@ import numpy as np
 import torch
 import sys
 import os
+from collections import OrderedDict
 
 
-def agg_FedAvg(w_locals):
+def agg_FedAvg(state_dicts):
     '''
     FedAvg aggregation
-    param w_locals: list of (sample_num, model_params)
+    param w_locals: list of (model_state_dicts)
+    return a state_dict
     '''
 
-    print("Aggregation begins")
-    training_num = 0
-    for idx in range(len(w_locals)):
-        (sample_num, averaged_params) = w_locals[idx]
-        training_num += sample_num
+    aggregated_state_dict = OrderedDict()
 
-    (sample_num, averaged_params) = w_locals[0]
-    for k in averaged_params.keys():
-        for i in range(0, len(w_locals)):
-            local_sample_number, local_model_params = w_locals[i]
-            w = local_sample_number / training_num
-            if i == 0:
-                averaged_params[k] = local_model_params[k] * w
+    for state_dict in state_dicts:
+        for key, value in state_dict.items():
+            if key in aggregated_state_dict:
+                aggregated_value = aggregated_state_dict[key] + value
+                aggregated_state_dict[key] = aggregated_value
             else:
-                averaged_params[k] += local_model_params[k] * w
-    return averaged_params
+                aggregated_state_dict[key] = value
+
+    num_state_dicts = len(state_dicts)
+    for key, value in aggregated_state_dict.items():
+        aggregated_state_dict[key] = value / num_state_dicts
+
+    return aggregated_state_dict
 
 
 def compute_similarity(args, s_locals):

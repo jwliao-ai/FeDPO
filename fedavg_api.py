@@ -69,7 +69,9 @@ class FedAvgAPI(object):
                 print("#################### Client {} training ####################".format(idx))
                 client.train(self.reference_model)
                 # we first suppose data is evenly distributed
-                w_locals.append((1, copy.deepcopy(client.get_policy_params())))
+                policy_dir = os.path.join(self.config.local_run_dir, f'LATEST', 'policy.pt')
+                state_dict = torch.load(policy_dir, map_location='cpu')
+                w_locals.append(state_dict)
 
             w_global = self._aggregate(w_locals)
             print(w_global)
