@@ -45,14 +45,14 @@ class FedAvgAPI(object):
 
     def _setup_clients(self, local_train_data, local_test_data,
                        local_policies):
-        logging.info("############ setup_clients (START) #############")
+        logging.info("#"*20 + " Setup clients (START) " + "#"*20)
         for client_idx in range(self.config.client_num_in_total):
             TrainerClass = getattr(trainers, self.config.trainer)
             c = Client(client_idx, local_train_data[client_idx],
                        local_test_data[client_idx], self.config, TrainerClass,
                        local_policies[client_idx])
             self.client_list.append(c)
-        logging.info("############ setup_clients (END) #############")
+        logging.info("#"*20 + " Setup clients (END) " + "#"*20)
 
     def _aggregate(self, w_locals):
         return agg_FedAvg(w_locals)
@@ -60,22 +60,21 @@ class FedAvgAPI(object):
     def train(self):
 
         for round_idx in range(self.config.comm_round):
-            logging.info(
-                "################## Communication round: {} ####################".format(round_idx))
+
+            logging.info("#"*20 + f" Communication round: {round_idx} " + "#"*20)
 
             w_locals = []
 
             for idx, client in enumerate(self.client_list):
-                print("#################### Client {} training ####################".format(idx))
+                logging.info("#"*20 + f" Client {idx} training (START) " + "#"*20)
                 client.train(self.reference_model)
-                # we first suppose data is evenly distributed
-                # policy_dir = os.path.join(self.config.local_run_dir, f'LATEST', 'policy.pt')
-                # state_dict = torch.load(policy_dir, map_location='cpu')
-                # w_locals.append(copy.deepcopy(state_dict['state']))
-                w_locals.append(copy.deepcopy(client.policy.state_dict()))
+                logging.info("#"*20 + f" Client {idx} training (END) " + "#"*20)
+                w_locals.append((client.train_sample_num, copy.deepcopy(client.policy.state_dict())))
 
+            print("#"*20 + f" Start aggregation round: {round_idx} " + "#"*20)
             w_global = self._aggregate(w_locals)
-            # print(w_global['transformer.ln_f.weight'])
+
+            del w_locals
             
             self.policy_global.load_state_dict(copy.deepcopy(w_global))
 
@@ -89,7 +88,7 @@ class FedAvgAPI(object):
 
     def _global_test(self, round_idx):
 
-        logging.info("################ global_test : {} ####################".format(round_idx))
+        logging.info("#"*20 + f" global_test : {round_idx} " + "#"*20)
 
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()

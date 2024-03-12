@@ -6,7 +6,7 @@ import os
 from collections import OrderedDict
 
 
-def agg_FedAvg(state_dicts):
+def agg_FedAvg(w_locals):
     '''
     FedAvg aggregation
     param w_locals: list of (model_state_dicts)
@@ -15,16 +15,16 @@ def agg_FedAvg(state_dicts):
 
     aggregated_state_dict = OrderedDict()
 
-    for state_dict in state_dicts:
+    total_train_samples = 0.0
+    for train_sample_num, _ in w_locals:
+        total_train_samples += train_sample_num
+
+    for train_sample_num, state_dict in w_locals:
         for key, value in state_dict.items():
             if key not in aggregated_state_dict:
-                aggregated_state_dict[key] = value
+                aggregated_state_dict[key] = value / total_train_samples * train_sample_num
             else:
-                aggregated_state_dict[key] = aggregated_state_dict[key] + value
-
-    num_state_dicts = len(state_dicts)
-    for key, value in aggregated_state_dict.items():
-        aggregated_state_dict[key] = value / num_state_dicts
+                aggregated_state_dict[key] = aggregated_state_dict[key] + value / total_train_samples * train_sample_num
 
     return aggregated_state_dict
 

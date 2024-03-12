@@ -25,6 +25,7 @@ class Client:
         self.client_idx = client_idx
 
         self.data = {"train": local_train_data, "test": local_eval_data}
+        self.train_sample_num = len(local_train_data)
 
         self.config = config
 
@@ -86,3 +87,4 @@ class Client:
 
     def get_policy_params(self):
         return copy.deepcopy(self.policy.state_dict())
+    

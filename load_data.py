@@ -12,7 +12,9 @@ from typing import Dict, List, Optional, Iterator, Callable, Union, Tuple
 
 
 def extract_anthropic_prompt(prompt_and_response):
+
     """Extract the anthropic prompt from a prompt and response pair."""
+    
     search_term = '\n\nAssistant:'
     search_term_idx = prompt_and_response.rfind(search_term)
     assert search_term_idx != -1, f"Prompt and response does not contain '{search_term}'"
@@ -20,7 +22,9 @@ def extract_anthropic_prompt(prompt_and_response):
 
 
 def strip_html_tags(html_string):
+
     """Strip HTML tags from a string, except for <code> tags (which contain real code in the StackExchange answers)."""
+    
     # Create a BeautifulSoup object
     soup = BeautifulSoup(html_string, 'html.parser')
 
@@ -49,10 +53,12 @@ def get_se(
     silent=False,
     cache_dir: str = None
 ) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
+    
     """Load the StackExchange dataset from Huggingface, and return a dict of prompts and responses. See get_hh for the format.
     
        We strip the HTML tags from the responses (except for <code> tags), and we add necessary newlines.
     """
+
     print(f'Loading SE dataset ({split} split) from Huggingface...')
     dataset = datasets.load_dataset('HuggingFaceH4/stack-exchange-preferences',
                                     cache_dir=cache_dir)['train']
@@ -97,11 +103,13 @@ def get_shp(
     silent: bool = False,
     cache_dir: str = None
 ) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
+    
     """Load the Stanford Human Preferences dataset from Huggingface and convert it to the necessary format. See hh for the format.
 
        We filter preference pairs to only keep pairs where the score ratio is at least 2.
        For this dataset, the sft_target is the response with the highest score.
     """
+
     print(f'Loading SHP dataset ({split} split) from Huggingface...')
     dataset = datasets.load_dataset('stanfordnlp/SHP',
                                     split=split,
@@ -143,6 +151,7 @@ def get_hh(
     silent: bool = False,
     cache_dir: str = None
 ) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
+    
     """Load the Anthropic Helpful-Harmless dataset from Huggingface and convert it to the necessary format.
     
        The dataset is converted to a dictionary with the following structure:
@@ -163,6 +172,7 @@ def get_hh(
        
        For this dataset, the sft_target is just the chosen response.
     """
+
     print(f'Loading HH dataset ({split} split) from Huggingface...')
     dataset = datasets.load_dataset('../autodl-tmp/hh-rlhf',
                                     split=split,
@@ -192,8 +202,10 @@ def get_dataset(name: str,
                 silent: bool = False,
                 cache_dir: str = None,
                 client_num_in_total: int = 1):
+    
     """Load the given dataset by name and split it into 'client_num_in_total + 1 (for global test)' parts.
        Supported by default are 'shp', 'hh', and 'se'."""
+    
     if name == 'shp':
         data = get_shp(split, silent=silent, cache_dir=cache_dir)
     elif name == 'hh':
@@ -207,19 +219,22 @@ def get_dataset(name: str,
         f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
 
     keys = list(data.keys())
-    total_keys = len(keys)
-    split_size = total_keys // (client_num_in_total + 1)
-    split_datasets = []
+    total_keys = len(data)
+    # split_size = total_keys // (client_num_in_total + 1)
+
+    idx = random.sample(range(0, total_keys), client_num_in_total)
+
+    split_local_datasets = []
 
     for i in range(client_num_in_total + 1):
-        start = i * split_size
+
         if i != client_num_in_total:
-            end = start + split_size
-            part_keys = keys[start:end]
-            split_datasets.append({key: data[key] for key in part_keys})
+            part_keys = keys[idx[i-1] if i != 0 else 0:idx[i]]
+            split_local_datasets.append({key: data[key] for key in part_keys})
         else:
             end = total_keys
-            part_keys = keys[start:end]
+            part_keys = keys[idx[i-1]:end]
             global_dataset = {key: data[key] for key in part_keys}
-
-    return split_datasets, global_dataset
+    
+    return split_local_datasets, global_dataset
+    
