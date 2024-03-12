@@ -1,22 +1,17 @@
 import copy
 import logging
-import random
-
-import numpy as np
+import resource
+import torch.multiprocessing as mp
+import torch.nn as nn
 import torch
 import wandb
 import trainers
 
 from client import Client
 from agg import agg_FedAvg
-
-from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
-import torch.nn as nn
-import os
-from omegaconf import OmegaConf, DictConfig
+from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port, init_wandb
+from omegaconf import OmegaConf
 from typing import Optional, Set
-import resource
-import torch.multiprocessing as mp
 
 
 class FedAvgAPI(object):
@@ -24,9 +19,13 @@ class FedAvgAPI(object):
     def __init__(self, local_train_data, global_train_data, local_test_data,
                  global_test_data, config, global_policy, local_policies,
                  reference_model) -> None:
+        self.batch_counter = 0
+        self.example_counter = 0
         self.config = config
         self.train_data_global = global_train_data
         self.test_data_global = global_test_data
+        self.global_wandb_id = f"Server-{wandb.util.generate_id()}"
+        self.wandb_run_initialized = False
 
         self.data_global = {
             "train": global_train_data,
@@ -69,7 +68,7 @@ class FedAvgAPI(object):
                 logging.info("#"*20 + f" Client {idx} training (START) " + "#"*20)
                 client.train(self.reference_model)
                 logging.info("#"*20 + f" Client {idx} training (END) " + "#"*20)
-                w_locals.append((client.train_sample_num, copy.deepcopy(client.policy.state_dict())))
+                w_locals.append((client.get_train_sample_num(), copy.deepcopy(client.get_policy_params())))
 
             print("#"*20 + f" Start aggregation round: {round_idx} " + "#"*20)
             w_global = self._aggregate(w_locals)
@@ -89,6 +88,10 @@ class FedAvgAPI(object):
     def _global_test(self, round_idx):
 
         logging.info("#"*20 + f" global_test : {round_idx} " + "#"*20)
+
+        if not self.wandb_run_initialized == True:
+            self.wandb_run_initialized = True
+            self.global_wandb_run = init_wandb(self.config, self.global_wandb_id, 999)
 
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
@@ -113,25 +116,17 @@ class FedAvgAPI(object):
             init_distributed(rank, world_size, port=self.config.fsdp_port)
 
         if self.config.debug:
-            wandb.init = lambda *args, **kwargs: None
-            wandb.log = lambda *args, **kwargs: None
-
-        if rank == 0 and self.config.wandb.enabled:
-            os.environ['WANDB_CACHE_DIR'] = get_local_dir(
-                self.config.local_dirs)
-            wandb.init(
-                entity=self.config.wandb.entity,
-                project=self.config.wandb.project,
-                config=OmegaConf.to_container(self.config),
-                dir=get_local_dir(self.config.local_dirs),
-                name=self.config.exp_name,
-            )
+            self.global_wandb_run.init = lambda *args, **kwargs: None
+            self.global_wandb_run.log = lambda *args, **kwargs: None
 
         print(
             f'Creating trainer on process {rank} with world size {world_size}')
 
         TrainerClass = getattr(trainers, self.config.trainer)
-        trainer = TrainerClass(999,
+        trainer = TrainerClass(self.batch_counter,
+                               self.example_counter,
+                               self.global_wandb_run,
+                               999,
                                self.policy_global,
                                self.config,
                                self.config.seed,
@@ -140,6 +135,6 @@ class FedAvgAPI(object):
                                reference_model=reference_model,
                                rank=rank,
                                world_size=world_size)
-
+        self.batch_counter, self.example_counter = trainer.get_batch_example_counters()
         trainer.test()
         trainer.save()

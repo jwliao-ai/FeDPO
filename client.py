@@ -1,38 +1,38 @@
-import logging
 import torch
-
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn as nn
-import transformers
-from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port
-import os
-import hydra
+from utils import init_distributed, init_wandb
 import torch.multiprocessing as mp
-from omegaconf import OmegaConf, DictConfig
 import trainers
 import wandb
-import json
-import socket
 from typing import Optional, Set
 import resource
 import copy
 
-
 class Client:
 
     def __init__(self, client_idx, local_train_data, local_eval_data, config,
-                 TrainerClass, policy) -> None:
+                 TrainerClass, policy):
         self.client_idx = client_idx
+        self.batch_counter = 0
+        self.example_counter = 0
 
         self.data = {"train": local_train_data, "test": local_eval_data}
         self.train_sample_num = len(local_train_data)
 
         self.config = config
 
+        self.wandb_run_initialized = False
+        self.wandb_id = f"Client{self.client_idx}-{wandb.util.generate_id()}"
+
         self.policy = policy
         self.TrainerClass = TrainerClass
 
     def train(self, reference_model: Optional[nn.Module] = None):
+        if not self.wandb_run_initialized:
+            self.wandb_run_initialized = True
+            self.wandb_run = init_wandb(self.config, self.wandb_id, self.client_idx)
+
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
             print('starting', world_size, 'processes for FSDP training')
@@ -56,24 +56,15 @@ class Client:
             init_distributed(rank, world_size, port=self.config.fsdp_port)
 
         if self.config.debug:
-            wandb.init = lambda *args, **kwargs: None
-            wandb.log = lambda *args, **kwargs: None
+            self.wandb_run.init = lambda *args, **kwargs: None
+            self.wandb_run.log = lambda *args, **kwargs: None
 
-        if rank == 0 and self.config.wandb.enabled:
-            os.environ['WANDB_CACHE_DIR'] = get_local_dir(
-                self.config.local_dirs)
-            wandb.init(
-                entity=self.config.wandb.entity,
-                project=self.config.wandb.project,
-                config=OmegaConf.to_container(self.config),
-                dir=get_local_dir(self.config.local_dirs),
-                name=self.config.exp_name,
-            )
+        print(f'Creating trainer on process {rank} with world size {world_size}')
 
-        print(
-            f'Creating trainer on process {rank} with world size {world_size}')
-
-        trainer = self.TrainerClass(self.client_idx,
+        trainer = self.TrainerClass(self.batch_counter,
+                                    self.example_counter,
+                                    self.wandb_run,
+                                    self.client_idx,
                                     self.policy,
                                     self.config,
                                     self.config.seed,
@@ -83,8 +74,12 @@ class Client:
                                     rank=rank,
                                     world_size=world_size)
         trainer.train()
+        self.batch_counter, self.example_counter = trainer.get_batch_example_counters()
         trainer.save()
 
     def get_policy_params(self):
         return copy.deepcopy(self.policy.state_dict())
+    
+    def get_train_sample_num(self):
+        return self.train_sample_num
     
