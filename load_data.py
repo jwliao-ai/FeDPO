@@ -58,15 +58,12 @@ def get_se(
     """
 
     print(f'Loading SE dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('HuggingFaceH4/stack-exchange-preferences',
-                                    cache_dir=cache_dir)['train']
+    dataset = datasets.load_dataset('../autodl-tmp/datasets/stack-exchange-preferences', cache_dir=cache_dir)['train']
     print('done')
 
     # shuffle the dataset and select 1% for test
     dataset = dataset.shuffle(seed=42)
-    dataset = dataset.select(range(int(
-        len(dataset) * 0.01))) if split == 'test' else dataset.select(
-            range(int(len(dataset) * 0.01), len(dataset)))
+    dataset = dataset.select(range(int(len(dataset) * 0.01))) if split == 'test' else dataset.select(range(int(len(dataset) * 0.01), len(dataset)))
 
     def strip_html(x):
         x['question'] = strip_html_tags(x['question'])
@@ -89,9 +86,8 @@ def get_se(
 
         data[prompt]['responses'] = responses  # a list of answers
         data[prompt]['pairs'] = pairs
-        data[prompt]['sft_target'] = max(
-            responses, key=lambda x: scores[responses.index(
-                x)])  # the response giving the highest score
+        data[prompt]['sft_target'] = max(responses, key=lambda x: scores[responses.index(x)])  # the response giving the highest score
+        data[prompt]['truncation_mode'] = 'keep_start'
 
     return data
 
@@ -102,16 +98,14 @@ def get_shp(
     cache_dir: str = None
 ) -> Dict[str, Dict[str, Union[List[Tuple[int, int]], List[str], str]]]:
     
-    """Load the Stanford Human Preferences dataset from Huggingface and convert it to the necessary format. See hh for the format.
+    """Load the Stanford Human Preferences dataset from Local and convert it to the necessary format. See hh for the format.
 
        We filter preference pairs to only keep pairs where the score ratio is at least 2.
        For this dataset, the sft_target is the response with the highest score.
     """
 
-    print(f'Loading SHP dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('stanfordnlp/SHP',
-                                    split=split,
-                                    cache_dir=cache_dir)
+    print(f'Loading SHP dataset ({split} split) from Local...')
+    dataset = datasets.load_dataset('../autodl-tmp/datasets/SHP', split=split, cache_dir=cache_dir)
     print('done')
 
     data = defaultdict(lambda: defaultdict(list))
@@ -128,12 +122,10 @@ def get_shp(
             continue
 
         # according to https://huggingface.co/datasets/stanfordnlp/SHP
-        data[prompt]['pairs'].append((
-            n_responses,
-            n_responses + 1) if row['labels'] == 1 else (n_responses + 1,
-                                                         n_responses))
+        data[prompt]['pairs'].append((n_responses, n_responses + 1) if row['labels'] == 1 else (n_responses + 1, n_responses))
         data[prompt]['responses'].extend(responses)
         data[prompt]['scores'].extend(scores)
+        data[prompt]['truncation_mode'] = 'keep_start'
 
     for prompt in data:
         data[prompt]['sft_target'] = max(data[prompt]['responses'],
@@ -191,48 +183,57 @@ def get_hh(
         data[prompt]['pairs'].append((n_responses, n_responses + 1))
         data[prompt]['responses'].extend(responses)
         data[prompt]['sft_target'] = chosen
+        data[prompt]['truncation_mode'] = 'keep_end'
 
     return data
 
 
-def get_dataset(name: str,
+def get_dataset(name_list: list[str],
                 split: str,
                 silent: bool = False,
                 cache_dir: str = None,
                 client_num_in_total: int = 1):
-    
     """Load the given dataset by name and split it into 'client_num_in_total + 1 (for global test)' parts.
        Supported by default are 'shp', 'hh', and 'se'."""
-    
-    if name == 'shp':
-        data = get_shp(split, silent=silent, cache_dir=cache_dir)
-    elif name == 'hh':
-        data = get_hh(split, silent=silent, cache_dir=cache_dir)
-    elif name == 'se':
-        data = get_se(split, silent=silent, cache_dir=cache_dir)
-    else:
-        raise ValueError(f"Unknown dataset '{name}'")
-
-    assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
-        f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
-
-    keys = list(data.keys())
-    total_keys = len(data)
-    # split_size = total_keys // (client_num_in_total + 1)
-
-    idx = random.sample(range(0, total_keys), client_num_in_total)
-
     split_local_datasets = []
+    global_dataset = {}
 
-    for i in range(client_num_in_total + 1):
-
-        if i != client_num_in_total:
-            part_keys = keys[idx[i-1] if i != 0 else 0:idx[i]]
-            split_local_datasets.append({key: data[key] for key in part_keys})
+    for name_place, name in enumerate(name_list):
+        if name == 'shp':
+            data = get_shp(split, silent=silent, cache_dir=cache_dir)
+        elif name == 'hh':
+            data = get_hh(split, silent=silent, cache_dir=cache_dir)
+        elif name == 'se':
+            data = get_se(split, silent=silent, cache_dir=cache_dir)
         else:
-            end = total_keys
-            part_keys = keys[idx[i-1]:end]
-            global_dataset = {key: data[key] for key in part_keys}
-    
+            raise ValueError(f"Unknown dataset '{name}'")
+
+        assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
+            f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
+
+        keys = list(data.keys())
+        total_keys = len(data)
+        # split_size = total_keys // (client_num_in_total + 1)
+
+        idx = random.sample(range(0, int(total_keys * 0.9)), client_num_in_total - 1)
+        idx.append(int(total_keys * 0.9))
+
+        for i in range(client_num_in_total + 1):
+
+            if i != client_num_in_total:
+                part_keys = keys[idx[i-1] if i != 0 else 0:idx[i]]
+                if name_place == 0:
+                    split_local_datasets.append({key: data[key] for key in part_keys})
+                else:
+                    split_local_datasets[i].update({key: data[key] for key in part_keys})
+            else:
+                end = total_keys
+                part_keys = keys[idx[i-1]:end]
+                if name_place == 0:
+                    global_dataset = {key: data[key] for key in part_keys}
+                else:
+                    global_dataset.update({key: data[key] for key in part_keys})
+        del keys
+        
     return split_local_datasets, global_dataset
     

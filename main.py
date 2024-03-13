@@ -92,14 +92,14 @@ def main(config: DictConfig):
         print('loaded pre-trained weights')
 
     local_train_data, global_train_data = get_dataset(
-        config.datasets[0],
+        config.datasets,
         split='train',
         silent=False,
         cache_dir=get_local_dir(config.local_dirs),
         client_num_in_total=config.client_num_in_total)
 
     local_test_data, global_test_data = get_dataset(
-        config.datasets[0],
+        config.datasets,
         split='test',
         silent=False,
         cache_dir=get_local_dir(config.local_dirs),

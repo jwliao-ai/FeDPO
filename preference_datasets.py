@@ -190,12 +190,10 @@ def get_batch_iterator(names: List[str],
     with TemporarilySeededRandom(seed):
         permutation_seeds = iter(np.random.randint(0, 2**32, size=1000000))
         flat_data = []
-        for name in names:
-            truncation_mode = 'keep_end' if name == 'hh' else 'keep_start'
-            data = dataset["train"] if split == 'train' else dataset["test"]
-            for prompt, data in data.items():
-                flat_data.append((prompt, data['responses'], data['pairs'],
-                                  data['sft_target'], truncation_mode))
+        data = dataset["train"] if split == 'train' else dataset["test"]
+        for prompt, data in data.items():
+            flat_data.append((prompt, data['responses'], data['pairs'],
+                                data['sft_target'], data['truncation_mode']))
 
     collate_fn = get_collate_fn(tokenizer)
 
