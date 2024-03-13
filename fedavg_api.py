@@ -19,8 +19,8 @@ class FedAvgAPI(object):
     def __init__(self, local_train_data, global_train_data, local_test_data,
                  global_test_data, config, global_policy, local_policies,
                  reference_model):
-        self.batch_counter = 0
-        self.example_counter = 0
+        self.global_batch_counter = 0
+        self.global_example_counter = 0
         self.config = config
         self.train_data_global = global_train_data
         self.test_data_global = global_test_data
@@ -52,9 +52,6 @@ class FedAvgAPI(object):
                        local_policies[client_idx])
             self.client_list.append(c)
         logging.info("#"*20 + " Setup clients (END) " + "#"*20)
-
-    def _aggregate(self, w_locals):
-        return agg_FedAvg(w_locals)
 
     def train(self):
 
@@ -124,8 +121,8 @@ class FedAvgAPI(object):
             f'Creating trainer on process {rank} with world size {world_size}')
 
         TrainerClass = getattr(trainers, self.config.trainer)
-        trainer = TrainerClass(self.batch_counter,
-                               self.example_counter,
+        trainer = TrainerClass(self.global_batch_counter,
+                               self.global_example_counter,
                                self.global_wandb_run,
                                999,
                                self.policy_global,
@@ -136,6 +133,9 @@ class FedAvgAPI(object):
                                reference_model=reference_model,
                                rank=rank,
                                world_size=world_size)
-        self.batch_counter, self.example_counter = trainer.get_batch_example_counters()
+        self.global_batch_counter, self.global_example_counter = trainer.get_batch_example_counters()
         trainer.test()
         trainer.save()
+
+    def _aggregate(self, w_locals):
+        return agg_FedAvg(w_locals)
