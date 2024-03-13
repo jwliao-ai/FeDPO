@@ -1,13 +1,16 @@
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn as nn
-from utils import init_distributed, init_wandb
+from utils import init_distributed, init_wandb, get_local_dir
 import torch.multiprocessing as mp
 import trainers
 import wandb
 from typing import Optional, Set
 import resource
 import copy
+import os
+from omegaconf import OmegaConf, DictConfig
+
 
 class Client:
 
@@ -22,17 +25,17 @@ class Client:
 
         self.config = config
 
-        self.wandb_run_initialized = False
-        self.wandb_id = f"Client{self.client_idx}-{wandb.util.generate_id()}"
+        # self.wandb_run_initialized = False
+        # self.wandb_id = f"Client{self.client_idx}-{wandb.util.generate_id()}"
 
         self.policy = policy
         self.TrainerClass = TrainerClass
 
     def train(self, reference_model: Optional[nn.Module] = None):
-        if not self.wandb_run_initialized:
-            self.wandb_run_initialized = True
-            print(f"########## Initializing wandb run for client {self.client_idx}...... ##########")
-            self.wandb_run = init_wandb(self.config, self.wandb_id, self.client_idx)
+        # if not self.wandb_run_initialized:
+        #     self.wandb_run_initialized = True
+        #     print(f"########## Initializing wandb run for client {self.client_idx}...... ##########")
+        #     self.wandb_run = init_wandb(self.config, self.wandb_id, self.client_idx)
 
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
@@ -48,8 +51,6 @@ class Client:
             print('starting single-process worker')
             self.worker_main(0, 1, reference_model)
 
-        print(self.batch_counter, self.example_counter)
-
     def worker_main(self,
                     rank: int,
                     world_size: int,
@@ -62,11 +63,21 @@ class Client:
             self.wandb_run.init = lambda *args, **kwargs: None
             self.wandb_run.log = lambda *args, **kwargs: None
 
+        if rank == 0 and self.config.wandb.enabled:
+            os.environ['WANDB_CACHE_DIR'] = get_local_dir(self.config.local_dirs)
+            wandb.init(
+                entity=self.config.wandb.entity,
+                project=self.config.wandb.project,
+                config=OmegaConf.to_container(self.config),
+                dir=get_local_dir(self.config.local_dirs),
+                name=self.config.exp_name,
+            )
+
         print(f'Creating trainer on process {rank} with world size {world_size}')
 
         trainer = self.TrainerClass(self.batch_counter,
                                     self.example_counter,
-                                    self.wandb_run,
+                                    # self.wandb_run,
                                     self.client_idx,
                                     self.policy,
                                     self.config,

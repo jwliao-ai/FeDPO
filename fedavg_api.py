@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch
 import wandb
 import trainers
+import os
 
 from client import Client
 from agg import agg_FedAvg
@@ -24,8 +25,8 @@ class FedAvgAPI(object):
         self.config = config
         self.train_data_global = global_train_data
         self.test_data_global = global_test_data
-        self.global_wandb_id = f"Server-{wandb.util.generate_id()}"
-        self.wandb_run_initialized = False
+        # self.global_wandb_id = f"Server-{wandb.util.generate_id()}"
+        # self.wandb_run_initialized = False
 
         self.data_global = {
             "train": global_train_data,
@@ -88,10 +89,10 @@ class FedAvgAPI(object):
 
         logging.info("#"*20 + f" global_test : {round_idx} " + "#"*20)
 
-        if not self.wandb_run_initialized == True:
-            self.wandb_run_initialized = True
-            print(f"########## Initializing wandb run for server...... ##########")
-            self.global_wandb_run = init_wandb(self.config, self.global_wandb_id, 999)
+        # if not self.wandb_run_initialized == True:
+        #     self.wandb_run_initialized = True
+        #     print(f"########## Initializing wandb run for server...... ##########")
+        #     self.global_wandb_run = init_wandb(self.config, self.global_wandb_id, 999)
 
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
@@ -118,6 +119,16 @@ class FedAvgAPI(object):
         if self.config.debug:
             self.global_wandb_run.init = lambda *args, **kwargs: None
             self.global_wandb_run.log = lambda *args, **kwargs: None
+
+        if rank == 0 and self.config.wandb.enabled:
+            os.environ['WANDB_CACHE_DIR'] = get_local_dir(self.config.local_dirs)
+            wandb.init(
+                entity=self.config.wandb.entity,
+                project=self.config.wandb.project,
+                config=OmegaConf.to_container(self.config),
+                dir=get_local_dir(self.config.local_dirs),
+                name=self.config.exp_name,
+            )
 
         print(
             f'Creating trainer on process {rank} with world size {world_size}')

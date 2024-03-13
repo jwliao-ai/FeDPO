@@ -152,7 +152,7 @@ class BasicTrainer(object):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 wandb_run,
+                #  wandb_run,
                  client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
@@ -169,7 +169,7 @@ class BasicTrainer(object):
         """
         self.example_counter = example_counter
         self.batch_counter = batch_counter
-        self.wandb_run = wandb_run
+        # self.wandb_run = wandb_run
         self.client_idx = client_idx
         self.seed = seed
         self.rank = rank
@@ -405,12 +405,12 @@ class BasicTrainer(object):
                 rank0_print(json.dumps(all_reference_samples[:10], indent=2))
 
         if self.config.wandb.enabled and self.rank == 0:
-            self.wandb_run.log(mean_eval_metrics, step=self.example_counter)
+            wandb.log(mean_eval_metrics, step=self.example_counter)
 
             if self.config.sample_during_eval:
-                self.wandb_run.log({"policy_samples": policy_text_table}, step=self.example_counter)
+                wandb.log({"policy_samples": policy_text_table}, step=self.example_counter)
                 if self.config.loss.name in {'dpo', 'ipo'}:
-                    self.wandb_run.log({"reference_samples": reference_text_table}, step=self.example_counter)
+                    wandb.log({"reference_samples": reference_text_table}, step=self.example_counter)
 
         if self.example_counter > 0:
             if self.config.debug:
@@ -496,12 +496,12 @@ class BasicTrainer(object):
                         rank0_print(json.dumps(all_reference_samples[:10], indent=2))
 
                 if self.config.wandb.enabled and self.rank == 0:
-                    self.wandb_run.log(mean_eval_metrics, step=self.example_counter)
+                    wandb.log(mean_eval_metrics, step=self.example_counter)
 
                     if self.config.sample_during_eval:
-                        self.wandb_run.log({"policy_samples": policy_text_table}, step=self.example_counter)
+                        wandb.log({"policy_samples": policy_text_table}, step=self.example_counter)
                         if self.config.loss.name in {'dpo', 'ipo'}:
-                            self.wandb_run.log({"reference_samples": reference_text_table}, step=self.example_counter)
+                            wandb.log({"reference_samples": reference_text_table}, step=self.example_counter)
 
                 if self.example_counter > 0:
                     if self.config.debug:
@@ -553,7 +553,7 @@ class BasicTrainer(object):
                 rank0_print(f'train stats after {self.example_counter} examples: {formatted_dict(mean_train_metrics)}')
 
                 if self.config.wandb.enabled and self.rank == 0:
-                    self.wandb_run.log(mean_train_metrics, step=self.example_counter)
+                    wandb.log(mean_train_metrics, step=self.example_counter)
 
                 last_log = time.time()
             else:
@@ -606,7 +606,7 @@ class FSDPTrainer(BasicTrainer):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 wandb_run,
+                #  wandb_run,
                  client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
@@ -622,7 +622,7 @@ class FSDPTrainer(BasicTrainer):
            Models are sharded at the block level, where the block class name is provided in the config.
         """
 
-        super().__init__(batch_counter, example_counter, wandb_run, client_idx, policy, config, seed, run_dir, dataset,
+        super().__init__(batch_counter, example_counter, client_idx, policy, config, seed, run_dir, dataset,
                          reference_model, rank, world_size)
         assert config.model.block_name is not None, 'must specify model.block_name (e.g., GPT2Block or GPTNeoXLayer) for FSDP'
         
@@ -720,7 +720,7 @@ class TensorParallelTrainer(BasicTrainer):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 wandb_run,
+                #  wandb_run,
                  client_idx: int,
                  policy,
                  config,
@@ -734,7 +734,7 @@ class TensorParallelTrainer(BasicTrainer):
            Based on https://github.com/BlackSamorez/tensor_parallel. Note sampling is extremely slow,
               see https://github.com/BlackSamorez/tensor_parallel/issues/66.
         """
-        super().__init__(batch_counter, example_counter, wandb_run, client_idx, policy, config, seed, run_dir, reference_model, rank,
+        super().__init__(batch_counter, example_counter, client_idx, policy, config, seed, run_dir, reference_model, rank,
                          world_size)
 
         rank0_print('Sharding policy...')
