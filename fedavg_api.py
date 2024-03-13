@@ -64,6 +64,8 @@ class FedAvgAPI(object):
             for idx, client in enumerate(self.client_list):
                 logging.info("#"*20 + f" Client {idx} training (START) " + "#"*20)
                 client.train(self.reference_model)
+                client.batch_counter = client.batch_counter + client.train_sample_num // self.config.batch_size
+                client.example_counter = client.example_counter + client.train_sample_num
                 logging.info("#"*20 + f" Client {idx} training (END) " + "#"*20)
                 w_locals.append((client.get_train_sample_num(), copy.deepcopy(client.get_policy_params())))
 
@@ -133,7 +135,6 @@ class FedAvgAPI(object):
                                reference_model=reference_model,
                                rank=rank,
                                world_size=world_size)
-        self.global_batch_counter, self.global_example_counter = trainer.get_batch_example_counters()
         trainer.test()
         trainer.save()
 

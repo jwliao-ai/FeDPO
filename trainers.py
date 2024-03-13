@@ -437,7 +437,7 @@ class BasicTrainer(object):
         rank0_print(f"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@{self.example_counter}@@@@@{self.batch_counter}@@@@@@@@@@@@@@@@@@@@@@@")
 
         last_log = None
-        earlystop = -1
+        # earlystop = -1
 
         for batch in self.train_iterator:
             #### BEGIN EVALUATION ####
@@ -446,7 +446,7 @@ class BasicTrainer(object):
                 rank0_print(f'Running evaluation on client {self.client_idx} after {self.example_counter} train examples')
                 self.policy.eval()
 
-                earlystop += 1
+                # earlystop += 1
                 
                 all_eval_metrics = defaultdict(list)
                 if self.config.sample_during_eval:
@@ -511,8 +511,8 @@ class BasicTrainer(object):
                         rank0_print(f'creating checkpoint to write to {output_dir}...')
                         self.save(output_dir, mean_eval_metrics)
 
-                if earlystop >= 1:
-                    break
+                # if earlystop >= 1:
+                #     break
                     
             #### END EVALUATION ####
 
@@ -560,7 +560,6 @@ class BasicTrainer(object):
                 rank0_print(f'skipping logging after {self.example_counter} examples to avoid logging too frequently')
             #### END TRAINING ####
 
-
     def clip_gradient(self):
         """Clip the gradient norm of the parameters of a non-FSDP policy."""
         return torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.config.max_grad_norm).item()
@@ -601,9 +600,6 @@ class BasicTrainer(object):
         scheduler_state_dict = self.scheduler.state_dict()
         self.write_state_dict(self.example_counter, scheduler_state_dict, metrics, 'scheduler.pt', output_dir)
 
-    def get_batch_example_counters(self):
-        return self.batch_counter, self.example_counter
-
 
 class FSDPTrainer(BasicTrainer):
 
@@ -629,7 +625,7 @@ class FSDPTrainer(BasicTrainer):
         super().__init__(batch_counter, example_counter, wandb_run, client_idx, policy, config, seed, run_dir, dataset,
                          reference_model, rank, world_size)
         assert config.model.block_name is not None, 'must specify model.block_name (e.g., GPT2Block or GPTNeoXLayer) for FSDP'
-
+        
         wrap_class = get_block_class_from_model(policy, config.model.block_name)
         model_auto_wrap_policy = functools.partial(transformer_auto_wrap_policy, transformer_layer_cls={wrap_class})
 

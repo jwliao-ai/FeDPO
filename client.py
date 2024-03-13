@@ -48,6 +48,8 @@ class Client:
             print('starting single-process worker')
             self.worker_main(0, 1, reference_model)
 
+        print(self.batch_counter, self.example_counter)
+
     def worker_main(self,
                     rank: int,
                     world_size: int,
@@ -75,7 +77,6 @@ class Client:
                                     rank=rank,
                                     world_size=world_size)
         trainer.train()
-        self.batch_counter, self.example_counter = trainer.get_batch_example_counters()
         trainer.save()
 
     def get_policy_params(self):
