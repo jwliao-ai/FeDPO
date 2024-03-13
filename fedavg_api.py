@@ -18,7 +18,7 @@ class FedAvgAPI(object):
 
     def __init__(self, local_train_data, global_train_data, local_test_data,
                  global_test_data, config, global_policy, local_policies,
-                 reference_model) -> None:
+                 reference_model):
         self.batch_counter = 0
         self.example_counter = 0
         self.config = config
@@ -91,6 +91,7 @@ class FedAvgAPI(object):
 
         if not self.wandb_run_initialized == True:
             self.wandb_run_initialized = True
+            print(f"########## Initializing wandb run for server...... ##########")
             self.global_wandb_run = init_wandb(self.config, self.global_wandb_id, 999)
 
         if 'FSDP' in self.config.trainer:

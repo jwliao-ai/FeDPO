@@ -31,6 +31,7 @@ class Client:
     def train(self, reference_model: Optional[nn.Module] = None):
         if not self.wandb_run_initialized:
             self.wandb_run_initialized = True
+            print(f"########## Initializing wandb run for client {self.client_idx}...... ##########")
             self.wandb_run = init_wandb(self.config, self.wandb_id, self.client_idx)
 
         if 'FSDP' in self.config.trainer:

@@ -152,7 +152,7 @@ class BasicTrainer(object):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 wandb_run,
+                 wandb_run: Union,
                  client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
@@ -434,10 +434,10 @@ class BasicTrainer(object):
         if self.config.loss.name in {'dpo', 'ipo'}:
             self.reference_model.eval()
 
-        last_log = None
+        rank0_print(f"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@{self.example_counter}@@@@@{self.batch_counter}@@@@@@@@@@@@@@@@@@@@@@@")
 
-        if self.config.debug == True:
-            earlystop = -1
+        last_log = None
+        earlystop = -1
 
         for batch in self.train_iterator:
             #### BEGIN EVALUATION ####
@@ -446,8 +446,7 @@ class BasicTrainer(object):
                 rank0_print(f'Running evaluation on client {self.client_idx} after {self.example_counter} train examples')
                 self.policy.eval()
 
-                if self.config.debug == True:
-                    earlystop += 1
+                earlystop += 1
                 
                 all_eval_metrics = defaultdict(list)
                 if self.config.sample_during_eval:
@@ -512,7 +511,7 @@ class BasicTrainer(object):
                         rank0_print(f'creating checkpoint to write to {output_dir}...')
                         self.save(output_dir, mean_eval_metrics)
 
-                if self.config.debug == True and earlystop >= 1:
+                if earlystop >= 1:
                     break
                     
             #### END EVALUATION ####
@@ -603,7 +602,7 @@ class BasicTrainer(object):
         self.write_state_dict(self.example_counter, scheduler_state_dict, metrics, 'scheduler.pt', output_dir)
 
     def get_batch_example_counters(self):
-        return (self.batch_counter, self.example_counter)
+        return self.batch_counter, self.example_counter
 
 
 class FSDPTrainer(BasicTrainer):
@@ -611,7 +610,7 @@ class FSDPTrainer(BasicTrainer):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 wandb_run,
+                 wandb_run: Union,
                  client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
