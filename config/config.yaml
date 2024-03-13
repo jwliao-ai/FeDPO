@@ -1,5 +1,5 @@
 # number of client
-client_num_in_total: 2
+client_num_in_total: 1
 
 # frequency of communication
 comm_round: 5

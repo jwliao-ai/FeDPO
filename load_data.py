@@ -164,7 +164,7 @@ def get_hh(
     """
 
     print(f'Loading HH dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('../autodl-tmp/hh-rlhf',
+    dataset = datasets.load_dataset('../autodl-tmp/datasets/hh-rlhf',
                                     split=split,
                                     cache_dir=cache_dir)
     print('done')
@@ -208,7 +208,7 @@ def get_dataset(name_list: list[str],
         else:
             raise ValueError(f"Unknown dataset '{name}'")
 
-        assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target'}, \
+        assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'truncation_mode'}, \
             f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
 
         keys = list(data.keys())

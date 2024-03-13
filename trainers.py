@@ -497,7 +497,7 @@ class BasicTrainer(object):
                         rank0_print(json.dumps(all_reference_samples[:10], indent=2))
 
                 if self.config.wandb.enabled and self.rank == 0:
-                    self.wandb_rundb.log(mean_eval_metrics, step=self.example_counter)
+                    self.wandb_run.log(mean_eval_metrics, step=self.example_counter)
 
                     if self.config.sample_during_eval:
                         self.wandb_run.log({"policy_samples": policy_text_table}, step=self.example_counter)
@@ -601,6 +601,9 @@ class BasicTrainer(object):
 
         scheduler_state_dict = self.scheduler.state_dict()
         self.write_state_dict(self.example_counter, scheduler_state_dict, metrics, 'scheduler.pt', output_dir)
+
+    def get_batch_example_counters(self):
+        return (self.batch_counter, self.example_counter)
 
 
 class FSDPTrainer(BasicTrainer):
@@ -752,6 +755,3 @@ class TensorParallelTrainer(BasicTrainer):
 
         self.write_state_dict(self.example_counter, policy_state_dict, metrics, 'policy.pt', output_dir)
         del policy_state_dict
-
-    def get_batch_example_counters(self):
-        return (self.batch_counter, self.example_counter)
