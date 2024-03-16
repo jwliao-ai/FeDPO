@@ -215,8 +215,8 @@ def get_dataset(name_list: list[str],
         total_keys = len(data)
         # split_size = total_keys // (client_num_in_total + 1)
 
-        idx = random.sample(range(0, int(total_keys * 0.9)), client_num_in_total - 1)
-        idx.append(int(total_keys * 0.9))
+        idx = random.sample(range(0, int(total_keys * 0.8)), client_num_in_total - 1)
+        idx.append(int(total_keys * 0.8))
 
         for i in range(client_num_in_total + 1):
 

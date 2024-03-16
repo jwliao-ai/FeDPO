@@ -33,7 +33,7 @@ datasets:
 wandb:
   enabled: true
   entity: null
-  project: "direct-preference-optimization"
+  project: "fedpo-client-num-1-verification"
 
 # to create the local run directory and cache models/datasets,
 #   we will try each of these directories in order; if none exist,

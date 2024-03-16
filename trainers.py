@@ -511,7 +511,7 @@ class BasicTrainer(object):
                         rank0_print(f'creating checkpoint to write to {output_dir}...')
                         self.save(output_dir, mean_eval_metrics)
 
-                # if earlystop >= 1:
+                # if earlystop >= 3:
                 #     break
                     
             #### END EVALUATION ####
@@ -572,7 +572,7 @@ class BasicTrainer(object):
                          dir_name: Optional[str] = None):
         """Write a checkpoint to disk."""
         if dir_name is None:
-            dir_name = os.path.join(self.run_dir, f'LATEST')
+            dir_name = os.path.join(self.run_dir, f'client-{self.client_idx}-LATEST')
 
         os.makedirs(dir_name, exist_ok=True)
         output_path = os.path.join(dir_name, filename)

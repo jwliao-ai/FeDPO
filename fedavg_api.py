@@ -23,8 +23,6 @@ class FedAvgAPI(object):
         self.global_batch_counter = 0
         self.global_example_counter = 0
         self.config = config
-        self.train_data_global = global_train_data
-        self.test_data_global = global_test_data
         # self.global_wandb_id = f"Server-{wandb.util.generate_id()}"
         # self.wandb_run_initialized = False
 
@@ -64,9 +62,10 @@ class FedAvgAPI(object):
 
             for idx, client in enumerate(self.client_list):
                 logging.info("#"*20 + f" Client {idx} training (START) " + "#"*20)
+                print(client.train_sample_num)
                 client.train(self.reference_model)
-                client.batch_counter = client.batch_counter + client.train_sample_num // self.config.batch_size
-                client.example_counter = client.example_counter + client.train_sample_num
+                # client.batch_counter = client.batch_counter + client.train_sample_num // self.config.batch_size
+                # client.example_counter = client.example_counter + client.train_sample_num
                 logging.info("#"*20 + f" Client {idx} training (END) " + "#"*20)
                 w_locals.append((client.get_train_sample_num(), copy.deepcopy(client.get_policy_params())))
 
@@ -77,13 +76,13 @@ class FedAvgAPI(object):
             
             self.policy_global.load_state_dict(copy.deepcopy(w_global))
 
-            for idx, client in enumerate(self.client_list):
-                client.policy.load_state_dict(copy.deepcopy(w_global))
-
             if round_idx == self.config.comm_round - 1:
                 self._global_test(round_idx)
             elif round_idx % self.config.frequency_of_the_test == 0:
                 self._global_test(round_idx)
+
+            for idx, client in enumerate(self.client_list):
+                client.policy.load_state_dict(copy.deepcopy(self.policy_global.state_dict()))
 
     def _global_test(self, round_idx):
 
@@ -136,7 +135,7 @@ class FedAvgAPI(object):
         TrainerClass = getattr(trainers, self.config.trainer)
         trainer = TrainerClass(self.global_batch_counter,
                                self.global_example_counter,
-                               self.global_wandb_run,
+                               # self.global_wandb_run,
                                999,
                                self.policy_global,
                                self.config,
@@ -146,7 +145,8 @@ class FedAvgAPI(object):
                                reference_model=reference_model,
                                rank=rank,
                                world_size=world_size)
-        trainer.test()
+        logging.info("#"*20 + f" Server has {len(self.data_global['train'])} samples for training and {len(self.data_global['test'])} samples for testing " + "#"*20)
+        trainer.train()
         trainer.save()
 
     def _aggregate(self, w_locals):
