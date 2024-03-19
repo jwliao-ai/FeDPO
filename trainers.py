@@ -441,7 +441,7 @@ class BasicTrainer(object):
             #### BEGIN EVALUATION ####
             if self.example_counter % self.config.eval_every == 0 and (
                     self.example_counter > 0 or self.config.do_first_eval):
-                rank0_print(f'Running evaluation on client {self.client_idx} after {self.example_counter} train examples')
+                rank0_print(f'Running evaluation on client {self.client_idx} after {self.example_counter} train examples and {self.batch_counter} train updates.')
                 self.policy.eval()
 
                 # earlystop += 1
