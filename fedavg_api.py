@@ -11,44 +11,49 @@ import os
 from client import Client
 from agg import agg_FedAvg
 from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port, init_wandb
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 from typing import Optional, Set
 
 
 class FedAvgAPI(object):
 
-    def __init__(self, local_train_data, global_train_data, local_test_data,
-                 global_test_data, config, global_policy, local_policies,
-                 reference_model):
+    def __init__(self, 
+                 local_train_data: list[dict], 
+                 global_train_data: dict, 
+                 test_data: dict, 
+                 config: DictConfig, 
+                 policy: nn.Module,
+                 reference_model: nn.Module):
+        
         self.global_batch_counter = 0
         self.global_example_counter = 0
         self.config = config
         # self.global_wandb_id = f"Server-{wandb.util.generate_id()}"
         # self.wandb_run_initialized = False
 
+        self.test_data = test_data
+
         self.data_global = {
             "train": global_train_data,
-            "test": global_test_data
+            "test": test_data
         }
 
-        self.policy_global = global_policy
+        self.policy_global = copy.deepcopy(policy)
 
         self.client_list = []
         self.train_data_local = local_train_data
-        self.test_data_local = local_test_data
 
-        self._setup_clients(local_train_data, local_test_data, local_policies)
+        self._setup_clients(local_train_data, copy.deepcopy(policy))
 
         self.reference_model = reference_model
 
-    def _setup_clients(self, local_train_data, local_test_data,
-                       local_policies):
+    def _setup_clients(self, local_train_data, policy):
         logging.info("#"*20 + " Setup clients (START) " + "#"*20)
         for client_idx in range(self.config.client_num_in_total):
             TrainerClass = getattr(trainers, self.config.trainer)
             c = Client(client_idx, local_train_data[client_idx],
-                       local_test_data[client_idx], self.config, TrainerClass,
-                       local_policies[client_idx])
+                       self.test_data, self.config, TrainerClass,
+                       copy.deepcopy(policy))
             self.client_list.append(c)
         logging.info("#"*20 + " Setup clients (END) " + "#"*20)
 
@@ -62,7 +67,7 @@ class FedAvgAPI(object):
 
             for idx, client in enumerate(self.client_list):
                 logging.info("#"*20 + f" Client {idx} training (START) " + "#"*20)
-                print(client.train_sample_num)
+                print(f"client {idx} has {client.train_sample_num} samples for traininig...")
                 client.train(self.reference_model)
                 # client.batch_counter = client.batch_counter + client.train_sample_num // self.config.batch_size
                 # client.example_counter = client.example_counter + client.train_sample_num
@@ -145,8 +150,13 @@ class FedAvgAPI(object):
                                reference_model=reference_model,
                                rank=rank,
                                world_size=world_size)
+        
         logging.info("#"*20 + f" Server has {len(self.data_global['train'])} samples for training and {len(self.data_global['test'])} samples for testing " + "#"*20)
-        trainer.train()
+        
+        if self.config.server_train:
+            trainer.train()
+        else:
+            trainer.test()
         trainer.save()
 
     def _aggregate(self, w_locals):

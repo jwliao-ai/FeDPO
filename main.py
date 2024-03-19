@@ -22,7 +22,6 @@ OmegaConf.register_new_resolver(
     "get_local_run_dir",
     lambda exp_name, local_dirs: get_local_run_dir(exp_name, local_dirs))
 
-
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def main(config: DictConfig):
     # Resolve hydra references, e.g. so we don't re-compute the run directory
@@ -96,23 +95,20 @@ def main(config: DictConfig):
         split='train',
         silent=False,
         cache_dir=get_local_dir(config.local_dirs),
-        client_num_in_total=config.client_num_in_total)
+        client_num_in_total=config.client_num_in_total,
+        data_evenly_distributed=config.data_evenly_distributed
+        )
 
-    local_test_data, global_test_data = get_dataset(
+    test_data = get_dataset(
         config.datasets,
         split='test',
         silent=False,
         cache_dir=get_local_dir(config.local_dirs),
-        client_num_in_total=config.client_num_in_total)
+        client_num_in_total=config.client_num_in_total,
+        data_evenly_distributed=config.data_evenly_distributed
+        )
 
-    global_policy = copy.deepcopy(policy)
-    local_policies = [
-        copy.deepcopy(policy) for _ in range(config.client_num_in_total)
-    ]
-
-    fedavgAPI = FedAvgAPI(local_train_data, global_train_data, local_test_data,
-                          global_test_data, config, global_policy,
-                          local_policies, reference_model)
+    fedavgAPI = FedAvgAPI(local_train_data, global_train_data, test_data, config, policy, reference_model)
 
     fedavgAPI.train()
 

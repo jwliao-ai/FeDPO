@@ -192,48 +192,79 @@ def get_dataset(name_list: list[str],
                 split: str,
                 silent: bool = False,
                 cache_dir: str = None,
-                client_num_in_total: int = 1):
+                client_num_in_total: int = 1,
+                data_evenly_distributed: bool = True):
     """Load the given dataset by name and split it into 'client_num_in_total + 1 (for global test)' parts.
        Supported by default are 'shp', 'hh', and 'se'."""
-    split_local_datasets = []
-    global_dataset = {}
-
-    for name_place, name in enumerate(name_list):
-        if name == 'shp':
-            data = get_shp(split, silent=silent, cache_dir=cache_dir)
-        elif name == 'hh':
-            data = get_hh(split, silent=silent, cache_dir=cache_dir)
-        elif name == 'se':
-            data = get_se(split, silent=silent, cache_dir=cache_dir)
-        else:
-            raise ValueError(f"Unknown dataset '{name}'")
-
-        assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'truncation_mode'}, \
-            f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
-
-        keys = list(data.keys())
-        total_keys = len(data)
-        # split_size = total_keys // (client_num_in_total + 1)
-
-        idx = random.sample(range(0, int(total_keys * 0.8)), client_num_in_total - 1)
-        idx.append(int(total_keys * 0.8))
-
-        for i in range(client_num_in_total + 1):
-
-            if i != client_num_in_total:
-                part_keys = keys[idx[i-1] if i != 0 else 0:idx[i]]
-                if name_place == 0:
-                    split_local_datasets.append({key: data[key] for key in part_keys})
-                else:
-                    split_local_datasets[i].update({key: data[key] for key in part_keys})
+    
+    if split == 'test':
+        test_dataset = {}
+        for name_place, name in enumerate(name_list):
+            if name == 'shp':
+                data = get_shp(split, silent=silent, cache_dir=cache_dir)
+            elif name == 'hh':
+                data = get_hh(split, silent=silent, cache_dir=cache_dir)
+            elif name == 'se':
+                data = get_se(split, silent=silent, cache_dir=cache_dir)
             else:
-                end = total_keys
-                part_keys = keys[idx[i-1]:end]
-                if name_place == 0:
-                    global_dataset = {key: data[key] for key in part_keys}
+                raise ValueError(f"Unknown dataset '{name}'")
+            
+            assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'truncation_mode'}, \
+                f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
+            
+            if name_place == 0:
+                test_dataset = data
+            else:
+                test_dataset.update(data)
+
+            return test_dataset
+    
+    else:
+        split_local_datasets = []
+        global_dataset = {}
+
+        for name_place, name in enumerate(name_list):
+            if name == 'shp':
+                data = get_shp(split, silent=silent, cache_dir=cache_dir)
+            elif name == 'hh':
+                data = get_hh(split, silent=silent, cache_dir=cache_dir)
+            elif name == 'se':
+                data = get_se(split, silent=silent, cache_dir=cache_dir)
+            else:
+                raise ValueError(f"Unknown dataset '{name}'")
+
+            assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'truncation_mode'}, \
+                f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
+
+            keys = list(data.keys())
+            total_keys = len(data)
+            # split_size = total_keys // (client_num_in_total + 1)
+
+            if data_evenly_distributed == True:
+                step_size = total_keys * 0.8 // client_num_in_total
+                idx = list(range(step_size, total_keys, step_size))
+                idx.append(int(total_keys * 0.8))
+            else:
+                idx = random.sample(range(0, int(total_keys * 0.8)), client_num_in_total - 1)
+                idx.sort()
+                idx.append(int(total_keys * 0.8))
+
+            for i in range(client_num_in_total + 1):
+
+                if i != client_num_in_total:
+                    part_keys = keys[idx[i-1] if i != 0 else 0:idx[i]]
+                    if name_place == 0:
+                        split_local_datasets.append({key: data[key] for key in part_keys})
+                    else:
+                        split_local_datasets[i].update({key: data[key] for key in part_keys})
                 else:
-                    global_dataset.update({key: data[key] for key in part_keys})
-        del keys
-        
-    return split_local_datasets, global_dataset
+                    end = total_keys
+                    part_keys = keys[idx[i-1]:end]
+                    if name_place == 0:
+                        global_dataset = {key: data[key] for key in part_keys}
+                    else:
+                        global_dataset.update({key: data[key] for key in part_keys})
+            del keys
+            
+        return split_local_datasets, global_dataset
     

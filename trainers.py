@@ -434,8 +434,6 @@ class BasicTrainer(object):
         if self.config.loss.name in {'dpo', 'ipo'}:
             self.reference_model.eval()
 
-        rank0_print(f"@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@{self.example_counter}@@@@@{self.batch_counter}@@@@@@@@@@@@@@@@@@@@@@@")
-
         last_log = None
         # earlystop = -1
 

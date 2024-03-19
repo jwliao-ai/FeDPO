@@ -1,5 +1,11 @@
+# train on server
+server_train: False
+
 # number of client
 client_num_in_total: 1
+
+# data distributed evenly or not
+data_evenly_distributed: true
 
 # frequency of communication
 comm_round: 5
