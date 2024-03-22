@@ -28,8 +28,8 @@ class FedAvgAPI(object):
         self.global_batch_counter = 0
         self.global_example_counter = 0
         self.config = config
-        # self.global_wandb_id = f"Server-{wandb.util.generate_id()}"
-        # self.wandb_run_initialized = False
+        self.global_wandb_id = f"Server"
+        self.wandb_run_initialized = False
 
         self.test_data = test_data
 
@@ -54,6 +54,7 @@ class FedAvgAPI(object):
             c = Client(client_idx, local_train_data[client_idx],
                        self.test_data, self.config, TrainerClass,
                        copy.deepcopy(policy))
+            c.create_wandb_run()
             self.client_list.append(c)
         logging.info("#"*20 + " Setup clients (END) " + "#"*20)
 
@@ -93,10 +94,10 @@ class FedAvgAPI(object):
 
         logging.info("#"*20 + f" global_test : {round_idx} " + "#"*20)
 
-        # if not self.wandb_run_initialized == True:
-        #     self.wandb_run_initialized = True
-        #     print(f"########## Initializing wandb run for server...... ##########")
-        #     self.global_wandb_run = init_wandb(self.config, self.global_wandb_id, 999)
+        if not self.wandb_run_initialized == True:
+            self.wandb_run_initialized = True
+            print(f"########## Initializing wandb run for server...... ##########")
+            self.global_wandb_run = init_wandb(self.config, self.global_wandb_id, 999)
 
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
@@ -140,7 +141,7 @@ class FedAvgAPI(object):
         TrainerClass = getattr(trainers, self.config.trainer)
         trainer = TrainerClass(self.global_batch_counter,
                                self.global_example_counter,
-                               # self.global_wandb_run,
+                               self.global_wandb_run,
                                999,
                                self.policy_global,
                                self.config,

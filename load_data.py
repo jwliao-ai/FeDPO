@@ -212,12 +212,9 @@ def get_dataset(name_list: list[str],
             assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'truncation_mode'}, \
                 f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
             
-            if name_place == 0:
-                test_dataset = data
-            else:
-                test_dataset.update(data)
+            test_dataset.update(data)
 
-            return test_dataset
+        return test_dataset
     
     else:
         split_local_datasets = []
@@ -241,7 +238,7 @@ def get_dataset(name_list: list[str],
             # split_size = total_keys // (client_num_in_total + 1)
 
             if data_evenly_distributed == True:
-                step_size = total_keys * 0.8 // client_num_in_total
+                step_size = int(total_keys * 0.8) // client_num_in_total
                 idx = list(range(step_size, total_keys, step_size))
                 idx.append(int(total_keys * 0.8))
             else:

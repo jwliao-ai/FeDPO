@@ -165,7 +165,7 @@ def init_wandb(config, wandb_id, client_idx):
             project=config.wandb.project,
             config=OmegaConf.to_container(config),
             dir=get_local_dir(config.local_dirs),
-            name=config.exp_name+f"-client-{client_idx}",
+            name=config.exp_name+f"-client-{client_idx}"
         )
     else:
         wandb_run = None

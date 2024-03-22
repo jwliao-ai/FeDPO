@@ -19,6 +19,7 @@ class Client:
         self.client_idx = client_idx
         self.batch_counter = 0
         self.example_counter = 0
+        self.round_counter = 0
 
         self.data = {"train": local_train_data, "test": local_eval_data}
         self.train_sample_num = len(local_train_data)
@@ -26,16 +27,14 @@ class Client:
         self.config = config
 
         # self.wandb_run_initialized = False
-        # self.wandb_id = f"Client{self.client_idx}-{wandb.util.generate_id()}"
+        self.wandb_id = f"Client{self.client_idx}"
 
         self.policy = policy
         self.TrainerClass = TrainerClass
-
+        
     def train(self, reference_model: Optional[nn.Module] = None):
-        # if not self.wandb_run_initialized:
-        #     self.wandb_run_initialized = True
-        #     print(f"########## Initializing wandb run for client {self.client_idx}...... ##########")
-        #     self.wandb_run = init_wandb(self.config, self.wandb_id, self.client_idx)
+
+        self.round_counter += 1
 
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
@@ -49,7 +48,7 @@ class Client:
                      join=True)
         else:
             print('starting single-process worker')
-            self.worker_main(0, 1, reference_model)
+            self.worker_main(0, 1, reference_model)        
 
     def worker_main(self,
                     rank: int,
@@ -64,20 +63,24 @@ class Client:
             self.wandb_run.log = lambda *args, **kwargs: None
 
         if rank == 0 and self.config.wandb.enabled:
-            os.environ['WANDB_CACHE_DIR'] = get_local_dir(self.config.local_dirs)
-            wandb.init(
-                entity=self.config.wandb.entity,
-                project=self.config.wandb.project,
-                config=OmegaConf.to_container(self.config),
-                dir=get_local_dir(self.config.local_dirs),
-                name=self.config.exp_name,
-            )
+        #     os.environ['WANDB_CACHE_DIR'] = get_local_dir(self.config.local_dirs)
+        #     wandb.init(
+        #         entity=self.config.wandb.entity,
+        #         project=self.config.wandb.project,
+        #         config=OmegaConf.to_container(self.config),
+        #         dir=get_local_dir(self.config.local_dirs),
+        #         name=self.config.exp_name,
+        #     )
+            wandb_run = self.wandb_run
+        else:
+            wandb_run = None
+
 
         print(f'Creating trainer on process {rank} with world size {world_size}')
 
         trainer = self.TrainerClass(self.batch_counter,
                                     self.example_counter,
-                                    # self.wandb_run,
+                                    wandb_run,
                                     self.client_idx,
                                     self.policy,
                                     self.config,
@@ -95,4 +98,8 @@ class Client:
     
     def get_train_sample_num(self):
         return self.train_sample_num
+
+    def create_wandb_run(self):
+        print(f"########## Initializing wandb run for client {self.client_idx}...... ##########")
+        self.wandb_run = init_wandb(self.config, self.wandb_id, self.client_idx)
     
