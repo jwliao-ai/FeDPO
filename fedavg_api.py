@@ -4,16 +4,14 @@ import resource
 import torch.multiprocessing as mp
 import torch.nn as nn
 import torch
-import wandb
 import trainers
 import os
 
 from client import Client
 from agg import agg_FedAvg
-from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port, init_wandb
+from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port, make_logger
 from omegaconf import OmegaConf, DictConfig
 from typing import Optional, Set
-
 
 class FedAvgAPI(object):
 
@@ -28,8 +26,6 @@ class FedAvgAPI(object):
         self.global_batch_counter = 0
         self.global_example_counter = 0
         self.config = config
-        self.global_wandb_id = f"Server"
-        self.wandb_run_initialized = False
 
         self.test_data = test_data
 
@@ -47,6 +43,8 @@ class FedAvgAPI(object):
 
         self.reference_model = reference_model
 
+        self.logger = make_logger("Server", self.config)
+
     def _setup_clients(self, local_train_data, policy):
         logging.info("#"*20 + " Setup clients (START) " + "#"*20)
         for client_idx in range(self.config.client_num_in_total):
@@ -54,7 +52,6 @@ class FedAvgAPI(object):
             c = Client(client_idx, local_train_data[client_idx],
                        self.test_data, self.config, TrainerClass,
                        copy.deepcopy(policy))
-            c.create_wandb_run()
             self.client_list.append(c)
         logging.info("#"*20 + " Setup clients (END) " + "#"*20)
 
@@ -70,8 +67,6 @@ class FedAvgAPI(object):
                 logging.info("#"*20 + f" Client {idx} training (START) " + "#"*20)
                 print(f"client {idx} has {client.train_sample_num} samples for traininig...")
                 client.train(self.reference_model)
-                # client.batch_counter = client.batch_counter + client.train_sample_num // self.config.batch_size
-                # client.example_counter = client.example_counter + client.train_sample_num
                 logging.info("#"*20 + f" Client {idx} training (END) " + "#"*20)
                 w_locals.append((client.get_train_sample_num(), copy.deepcopy(client.get_policy_params())))
 
@@ -93,11 +88,6 @@ class FedAvgAPI(object):
     def _global_test(self, round_idx):
 
         logging.info("#"*20 + f" global_test : {round_idx} " + "#"*20)
-
-        if not self.wandb_run_initialized == True:
-            self.wandb_run_initialized = True
-            print(f"########## Initializing wandb run for server...... ##########")
-            self.global_wandb_run = init_wandb(self.config, self.global_wandb_id, 999)
 
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
@@ -122,18 +112,12 @@ class FedAvgAPI(object):
             init_distributed(rank, world_size, port=self.config.fsdp_port)
 
         if self.config.debug:
-            self.global_wandb_run.init = lambda *args, **kwargs: None
-            self.global_wandb_run.log = lambda *args, **kwargs: None
+            self.logger = None
 
-        if rank == 0 and self.config.wandb.enabled:
-            os.environ['WANDB_CACHE_DIR'] = get_local_dir(self.config.local_dirs)
-            wandb.init(
-                entity=self.config.wandb.entity,
-                project=self.config.wandb.project,
-                config=OmegaConf.to_container(self.config),
-                dir=get_local_dir(self.config.local_dirs),
-                name=self.config.exp_name,
-            )
+        if rank == 0 and self.config.tensorboard.enabled:
+            logger = self.logger
+        else:
+            logger = None
 
         print(
             f'Creating trainer on process {rank} with world size {world_size}')
@@ -141,7 +125,7 @@ class FedAvgAPI(object):
         TrainerClass = getattr(trainers, self.config.trainer)
         trainer = TrainerClass(self.global_batch_counter,
                                self.global_example_counter,
-                               self.global_wandb_run,
+                               logger,
                                999,
                                self.policy_global,
                                self.config,

@@ -1,4 +1,5 @@
 import os
+import time
 import getpass
 from datetime import datetime
 import torch
@@ -11,8 +12,8 @@ import socket
 import os
 from typing import Dict, Union, Type, List
 import wandb
-from omegaconf import OmegaConf
-
+from omegaconf import OmegaConf, DictConfig
+from logger import Logger
 
 def get_open_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -171,6 +172,20 @@ def init_wandb(config, wandb_id, client_idx):
         wandb_run = None
 
     return wandb_run
+
+def make_logger(logdir_prefix: str, config: DictConfig) -> Logger:
+    data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "./data")
+
+    if not (os.path.exists(data_path)):
+        os.makedirs(data_path)
+    
+    logdir = (logdir_prefix + "_" + config.exp_name + "_" + time.strftime("%d-%m-%Y_%H-%M-%S"))
+    logdir = os.path.join(data_path, logdir)
+    if not (os.path.exists(logdir)):
+        os.makedirs(logdir)
+
+    return Logger(logdir)
+
 class TemporarilySeededRandom:
     def __init__(self, seed):
         """Temporarily set the random seed, and then restore it when exiting the context."""
