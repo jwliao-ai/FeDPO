@@ -9,9 +9,10 @@ import os
 
 from client import Client
 from agg import agg_FedAvg
-from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port, make_logger
+from utils import get_local_dir, get_local_run_dir, disable_dropout, init_distributed, get_open_port, make_logger_path
 from omegaconf import OmegaConf, DictConfig
 from typing import Optional, Set
+from tensorboardX import SummaryWriter
 
 class FedAvgAPI(object):
 
@@ -43,8 +44,8 @@ class FedAvgAPI(object):
 
         self.reference_model = reference_model
 
-        self.logger = make_logger("Server", self.config)
-
+        self.logger_dir = make_logger_path(f"Server", self.config)
+        
     def _setup_clients(self, local_train_data, policy):
         logging.info("#"*20 + " Setup clients (START) " + "#"*20)
         for client_idx in range(self.config.client_num_in_total):
@@ -103,6 +104,8 @@ class FedAvgAPI(object):
             print('starting single-process worker')
             self.worker_main(0, 1, self.reference_model)
 
+        self.global_batch_counter += 1000
+        
     def worker_main(self,
                     rank: int,
                     world_size: int,
@@ -111,21 +114,13 @@ class FedAvgAPI(object):
         if 'FSDP' in self.config.trainer:
             init_distributed(rank, world_size, port=self.config.fsdp_port)
 
-        if self.config.debug:
-            self.logger = None
-
-        if rank == 0 and self.config.tensorboard.enabled:
-            logger = self.logger
-        else:
-            logger = None
-
         print(
             f'Creating trainer on process {rank} with world size {world_size}')
 
         TrainerClass = getattr(trainers, self.config.trainer)
         trainer = TrainerClass(self.global_batch_counter,
                                self.global_example_counter,
-                               logger,
+                               self.logger_dir,
                                999,
                                self.policy_global,
                                self.config,

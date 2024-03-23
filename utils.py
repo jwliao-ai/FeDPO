@@ -173,7 +173,7 @@ def init_wandb(config, wandb_id, client_idx):
 
     return wandb_run
 
-def make_logger(logdir_prefix: str, config: DictConfig) -> Logger:
+def make_logger_path(logdir_prefix: str, config: DictConfig) -> str:
     data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "./data")
 
     if not (os.path.exists(data_path)):
@@ -184,7 +184,7 @@ def make_logger(logdir_prefix: str, config: DictConfig) -> Logger:
     if not (os.path.exists(logdir)):
         os.makedirs(logdir)
 
-    return Logger(logdir)
+    return logdir
 
 class TemporarilySeededRandom:
     def __init__(self, seed):

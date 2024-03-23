@@ -193,7 +193,8 @@ def get_dataset(name_list: list[str],
                 silent: bool = False,
                 cache_dir: str = None,
                 client_num_in_total: int = 1,
-                data_evenly_distributed: bool = True):
+                data_evenly_distributed: bool = True,
+                use_small_dataset: bool = True):
     """Load the given dataset by name and split it into 'client_num_in_total + 1 (for global test)' parts.
        Supported by default are 'shp', 'hh', and 'se'."""
     
@@ -211,6 +212,11 @@ def get_dataset(name_list: list[str],
             
             assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'truncation_mode'}, \
                 f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
+
+            if use_small_dataset:
+                total_keys = len(data) // 10
+                keys = list(data.keys())[0: total_keys]
+                data = {key: data[key] for key in keys}
             
             test_dataset.update(data)
 
@@ -233,9 +239,13 @@ def get_dataset(name_list: list[str],
             assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'truncation_mode'}, \
                 f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
 
-            keys = list(data.keys())
             total_keys = len(data)
-            # split_size = total_keys // (client_num_in_total + 1)
+            keys = list(data.keys())
+            
+            if use_small_dataset:
+                total_keys = total_keys // 10
+                keys = keys[0: total_keys]
+                data = {key: data[key] for key in keys}
 
             if data_evenly_distributed == True:
                 step_size = int(total_keys * 0.8) // client_num_in_total

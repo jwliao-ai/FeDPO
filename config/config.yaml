@@ -1,3 +1,6 @@
+# use small (1/100) datasets or not
+use_small_dataset: False
+
 # train on server
 server_train: False
 

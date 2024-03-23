@@ -1,7 +1,7 @@
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn as nn
-from utils import init_distributed, get_local_dir, make_logger
+from utils import init_distributed, get_local_dir, make_logger_path
 import torch.multiprocessing as mp
 import trainers
 from typing import Optional, Set
@@ -9,6 +9,7 @@ import resource
 import copy
 import os
 from omegaconf import OmegaConf, DictConfig
+from tensorboardX import SummaryWriter
 
 class Client:
 
@@ -33,7 +34,7 @@ class Client:
         self.policy = policy
         self.TrainerClass = TrainerClass
 
-        self.logger = make_logger(f"Client-{self.client_idx}", self.config)
+        self.logger_dir = make_logger_path(f"Client-{self.client_idx}", config)
         
     def train(self, reference_model: Optional[nn.Module] = None):
 
@@ -51,6 +52,8 @@ class Client:
             print('starting single-process worker')
             self.worker_main(0, 1, reference_model)        
 
+        self.batch_counter += 1000
+    
     def worker_main(self,
                     rank: int,
                     world_size: int,
@@ -59,19 +62,11 @@ class Client:
         if 'FSDP' in self.config.trainer:
             init_distributed(rank, world_size, port=self.config.fsdp_port)
 
-        if self.config.debug:
-            self.logger = None
-
-        if rank == 0 and self.config.tensorboard.enabled:
-            logger = self.logger
-        else:
-            logger = None
-
         print(f'Creating trainer on process {rank} with world size {world_size}')
 
         trainer = self.TrainerClass(self.batch_counter,
                                     self.example_counter,
-                                    logger,
+                                    self.logger_dir,
                                     self.client_idx,
                                     self.policy,
                                     self.config,

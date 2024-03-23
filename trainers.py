@@ -29,6 +29,7 @@ from utils import (
     get_block_class_from_model,
     rank0_print,
     get_local_dir,
+    make_logger_path
 )
 import numpy as np
 import tqdm
@@ -40,7 +41,8 @@ import time
 import json
 import functools
 from typing import Optional, Dict, List, Union, Tuple
-from logger import Logger
+from tensorboardX import SummaryWriter
+
 
 
 def preference_loss(
@@ -152,7 +154,7 @@ class BasicTrainer(object):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 logger: Logger,
+                 logger_dir: str,
                  client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
@@ -169,7 +171,7 @@ class BasicTrainer(object):
         """
         self.example_counter = example_counter
         self.batch_counter = batch_counter
-        self.logger = logger
+        self.logger = SummaryWriter(logger_dir, flush_secs=1, max_queue=1)
         self.client_idx = client_idx
         self.seed = seed
         self.rank = rank
@@ -406,7 +408,7 @@ class BasicTrainer(object):
 
         if self.config.tensorboard.enabled and self.rank == 0:
             for k, v in mean_eval_metrics.items():
-                self.logger.log_scalar(v, k)
+                self.logger.add_scalar('{}'.format(k), v, self.batch_counter)
 
             # if self.config.sample_during_eval:
             #     self.wandb_run.log({"policy_samples": policy_text_table})
@@ -496,7 +498,7 @@ class BasicTrainer(object):
 
                 if self.config.tensorboard.enabled and self.rank == 0:
                     for k, v in mean_eval_metrics.items():
-                        self.logger.log_scalar(v, k)
+                        self.logger.add_scalar('{}'.format(k), v, self.batch_counter)
 
                     # if self.config.sample_during_eval:
                     #     self.wandb_run.log({"policy_samples": policy_text_table})
@@ -554,7 +556,7 @@ class BasicTrainer(object):
 
                 if self.config.tensorboard.enabled and self.rank == 0:
                     for k, v in mean_train_metrics.items():
-                        self.logger.log_scalar(v, k)
+                        self.logger.add_scalar('{}'.format(k), v, self.batch_counter)
 
                 last_log = time.time()
             else:
@@ -607,7 +609,7 @@ class FSDPTrainer(BasicTrainer):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 logger: Logger,
+                 logger_dir: str,
                  client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
@@ -623,7 +625,7 @@ class FSDPTrainer(BasicTrainer):
            Models are sharded at the block level, where the block class name is provided in the config.
         """
 
-        super().__init__(batch_counter, example_counter, logger, client_idx, policy, config, seed, run_dir, dataset,
+        super().__init__(batch_counter, example_counter, logger_dir, client_idx, policy, config, seed, run_dir, dataset,
                          reference_model, rank, world_size)
         assert config.model.block_name is not None, 'must specify model.block_name (e.g., GPT2Block or GPTNeoXLayer) for FSDP'
         
@@ -721,7 +723,7 @@ class TensorParallelTrainer(BasicTrainer):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 logger: Logger,
+                 logger_dir: str,
                  client_idx: int,
                  policy,
                  config,
@@ -735,7 +737,7 @@ class TensorParallelTrainer(BasicTrainer):
            Based on https://github.com/BlackSamorez/tensor_parallel. Note sampling is extremely slow,
               see https://github.com/BlackSamorez/tensor_parallel/issues/66.
         """
-        super().__init__(batch_counter, example_counter, logger, client_idx, policy, config, seed, run_dir, reference_model, rank,
+        super().__init__(batch_counter, example_counter, logger_dir, client_idx, policy, config, seed, run_dir, reference_model, rank,
                          world_size)
 
         rank0_print('Sharding policy...')

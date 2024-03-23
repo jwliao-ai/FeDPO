@@ -96,7 +96,8 @@ def main(config: DictConfig):
         silent=False,
         cache_dir=get_local_dir(config.local_dirs),
         client_num_in_total=config.client_num_in_total,
-        data_evenly_distributed=config.data_evenly_distributed
+        data_evenly_distributed=config.data_evenly_distributed,
+        use_small_dataset=config.use_small_dataset
         )
 
     test_data = get_dataset(
@@ -105,7 +106,8 @@ def main(config: DictConfig):
         silent=False,
         cache_dir=get_local_dir(config.local_dirs),
         client_num_in_total=config.client_num_in_total,
-        data_evenly_distributed=config.data_evenly_distributed
+        data_evenly_distributed=config.data_evenly_distributed,
+        use_small_dataset=config.use_small_dataset
         )
 
     fedavgAPI = FedAvgAPI(local_train_data, global_train_data, test_data, config, policy, reference_model)
