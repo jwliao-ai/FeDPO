@@ -65,10 +65,10 @@ class FedAvgAPI(object):
             w_locals = []
 
             for idx, client in enumerate(self.client_list):
-                logging.info("#"*20 + f" Client {idx} training (START) " + "#"*20)
+                logging.info("#"*20 + f" Round {round_idx} Client {idx} training (START) " + "#"*20)
                 print(f"client {idx} has {client.train_sample_num} samples for traininig...")
                 client.train(self.reference_model)
-                logging.info("#"*20 + f" Client {idx} training (END) " + "#"*20)
+                logging.info("#"*20 + f" Round {round_idx} Client {idx} training (END) " + "#"*20)
                 w_locals.append((client.get_train_sample_num(), copy.deepcopy(client.get_policy_params())))
 
             print("#"*20 + f" Start aggregation round: {round_idx} " + "#"*20)
@@ -104,7 +104,8 @@ class FedAvgAPI(object):
             print('starting single-process worker')
             self.worker_main(0, 1, self.reference_model)
 
-        self.global_batch_counter += 1000
+        self.global_batch_counter += 310 * self.config.client_num_in_total
+        self.global_example_counter += 19840 * self.config.client_num_in_total
         
     def worker_main(self,
                     rank: int,

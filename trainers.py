@@ -505,15 +505,15 @@ class BasicTrainer(object):
                     #     if self.config.loss.name in {'dpo', 'ipo'}:
                     #         self.wandb_run.log({"reference_samples": reference_text_table})
 
-                if self.example_counter > 0:
-                    if self.config.debug:
-                        rank0_print('skipping save in debug mode')
-                    else:
-                        output_dir = os.path.join(self.run_dir, f'client-{self.client_idx}-step-{self.example_counter}')
-                        rank0_print(f'creating checkpoint to write to {output_dir}...')
-                        self.save(output_dir, mean_eval_metrics)
+                # if self.example_counter > 0:
+                #     if self.config.debug:
+                #         rank0_print('skipping save in debug mode')
+                #     else:
+                #         output_dir = os.path.join(self.run_dir, f'client-{self.client_idx}-step-{self.example_counter}')
+                #         rank0_print(f'creating checkpoint to write to {output_dir}...')
+                #         self.save(output_dir, mean_eval_metrics)
 
-                if earlystop >= 2:
+                if earlystop >= 5:
                     break
                     
             #### END EVALUATION ####

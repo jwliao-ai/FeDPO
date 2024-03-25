@@ -52,7 +52,8 @@ class Client:
             print('starting single-process worker')
             self.worker_main(0, 1, reference_model)        
 
-        self.batch_counter += 1000
+        self.batch_counter += 310
+        self.example_counter += 19840
     
     def worker_main(self,
                     rank: int,
