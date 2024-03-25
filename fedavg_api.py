@@ -47,15 +47,17 @@ class FedAvgAPI(object):
         
     def _setup_clients(self, local_train_data: list[dict], policy: nn.Module):
 
-        logging.info("-"*20 + " Setup clients (START) " + "-"*20)
+        print("-"*20 + " Setup clients (START) " + "-"*20)
         for client_idx in range(self.config.client_num_in_total):
             c = Client(client_idx, local_train_data[client_idx], self.test_data, self.config, copy.deepcopy(policy))
             self.client_list.append(c)
-        logging.info("-"*20 + " Setup clients (END) " + "-"*20)
+        print("-"*20 + " Setup clients (END) " + "-"*20)
 
     def train(self):
         for round_idx in range(self.config.comm_round):
+            logging.info("-"*64)
             logging.info("-"*20 + f" Communication Round: {round_idx} " + "-"*20)
+            logging.info("-"*64)
 
             if round_idx == self.config.comm_round - 1:
                 self._global_test(round_idx)
@@ -67,30 +69,30 @@ class FedAvgAPI(object):
             client_accs = []
 
             for client in self.client_list:
-                logging.info("#"*20 + f" Round {round_idx} Client {client.client_idx} training (START) " + "#"*20)
+                print("-"*20 + f" Round {round_idx}: Client {client.client_idx} training (START) " + "-"*20)
                 print(f"client {client.client_idx} has {client.train_sample_num} samples for traininig...")
                 client.train(self.reference_model)
-                logging.info("#"*20 + f" Round {round_idx} Client {client.client_idx} training (END) " + "#"*20)
-                logging.info("#"*20 + f" Round {round_idx} Client {client.client_idx} testing (START) " + "#"*20)
+                print("-"*20 + f" Round {round_idx}: Client {client.client_idx} training (END) " + "-"*20)
+                print("-"*20 + f" Round {round_idx}: Client {client.client_idx} testing (START) " + "-"*20)
                 client.test(self.acc_global, self.reference_model)
-                logging.info("-"*20 + f" Accuracy of client-{client.client_idx}: {client.eval_acc}.")
-                logging.info("#"*20 + f" Round {round_idx} Client {client.client_idx} testing (END) " + "#"*20)
+                logging.info("-"*20 + f" Round {round_idx}, Accuracy of Client-{client.client_idx}: {client.eval_acc}.")
+                print("-"*20 + f" Round {round_idx}: Client {client.client_idx} testing (END) " + "-"*20)
                 w_locals.append(client.get_policy_params())
                 client_accs.append(client.eval_acc)
                 ratios.append(np.exp(self.config.temp_a * client.eval_acc))
                 self.logger.add_scalar(f"acc/client-{client.client_idx}", client.eval_acc, round_idx)
 
             self.logger.add_scalar(f"avg_acc/client", np.mean(client_accs), round_idx)
-            logging.info("-"*20 + f" Aggregation Round: {round_idx} (START) " + "-"*20)
+            print("-"*20 + f" Round: {round_idx} Aggregation (START) " + "-"*20)
             ratios = ratios / sum(ratios)
             self.aggregate(w_locals, ratios)
-            logging.info("-"*20 + f" Aggregation Round: {round_idx} (END) " + "-"*20)
+            print("-"*20 + f" Round: {round_idx} Aggregation (END) " + "-"*20)
             
             self.send_parameters()
 
     def _global_test(self, round_idx):
 
-        logging.info("-"*20 + f" Global test round: {round_idx} (START) " + "-"*20)
+        print("-"*20 + f" Round: {round_idx} Global test (START) " + "-"*20)
 
         trainer = trainers.BasicTrainer(self.global_batch_counter,
                                         self.global_example_counter,
@@ -107,8 +109,8 @@ class FedAvgAPI(object):
         
         self.acc_global = trainer.test()
 
-        logging.info("-"*20 + f" The average eval accuracy of server is: {self.acc_global} " + "-"*20)
-        logging.info("-"*20 + f" Global test round: {round_idx} (END) " + "-"*20)
+        logging.info("-"*20 + f" Round: {round_idx}: Accuracy of Server is: {self.acc_global} " + "-"*20)
+        print("-"*20 + f" Round: {round_idx}: Global test (END) " + "-"*20)
 
         self.logger.add_scalar(f"avg_acc/server", self.acc_global, round_idx)
 
