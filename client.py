@@ -1,17 +1,12 @@
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn as nn
-from utils import init_distributed, get_local_dir, make_logger_path
+from utils import init_distributed, make_logger_path
 import torch.multiprocessing as mp
 import trainers
 from typing import Optional, Set
-from collections import defaultdict
 import resource
-import copy
-import os
 from omegaconf import OmegaConf, DictConfig
-from tensorboardX import SummaryWriter
-from trainers import get_batch_iterator
 
 class Client:
 

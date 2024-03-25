@@ -1,10 +1,4 @@
-import os
-
 import torch
-import copy
-
-import torch
-
 torch.backends.cuda.matmul.allow_tf32 = True
 import transformers
 from utils import get_local_dir, get_local_run_dir, disable_dropout, get_open_port
@@ -16,7 +10,6 @@ from omegaconf import OmegaConf, DictConfig
 import json
 import socket
 from typing import Optional, Set
-import resource
 
 OmegaConf.register_new_resolver(
     "get_local_run_dir",
