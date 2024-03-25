@@ -154,6 +154,7 @@ class BasicTrainer(object):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
+                 decay: float,
                  logger_dir: str,
                  client_idx: int,
                  policy: nn.Module,
@@ -179,11 +180,11 @@ class BasicTrainer(object):
         self.config = config
         self.run_dir = run_dir
         self.dataset = dataset
+        self.decay = decay
 
         tokenizer_name_or_path = config.model.tokenizer_name_or_path or config.model.name_or_path
         rank0_print(f'Loading tokenizer {tokenizer_name_or_path}')
-        self.tokenizer = transformers.AutoTokenizer.from_pretrained(
-            tokenizer_name_or_path, cache_dir=get_local_dir(config.local_dirs))
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name_or_path, cache_dir=get_local_dir(config.local_dirs))
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
@@ -205,8 +206,7 @@ class BasicTrainer(object):
                                                  n_examples=config.n_examples,
                                                  batch_size=config.batch_size,
                                                  silent=rank != 0,
-                                                 cache_dir=get_local_dir(
-                                                     config.local_dirs),
+                                                 cache_dir=get_local_dir(config.local_dirs),
                                                  dataset=self.dataset)
         rank0_print(f'Loaded train data iterator')
         self.eval_iterator = get_batch_iterator(
@@ -339,10 +339,6 @@ class BasicTrainer(object):
 
     def test(self):
         
-        rank0_print(f'Using {self.config.optimizer} optimizer')
-        self.optimizer = getattr(torch.optim, self.config.optimizer)(self.policy.parameters(), lr=self.config.lr)
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda step: min(1.0, (step + 1) / (self.config.warmup_steps + 1)))
-        
         torch.manual_seed(self.seed)
         np.random.seed(self.seed)
         random.seed(self.seed)
@@ -354,79 +350,29 @@ class BasicTrainer(object):
         self.policy.eval()
 
         all_eval_metrics = defaultdict(list)
-        # if self.config.sample_during_eval:
-        #     all_policy_samples, all_reference_samples = [], []
-        #     policy_text_table = wandb.Table(columns=["step", "prompt", "sample"])
-        #     if self.config.loss.name in {'dpo', 'ipo'}:
-        #         reference_text_table = wandb.Table(columns=["step", "prompt", "sample"])
-
+        
         for eval_batch in (tqdm.tqdm(self.eval_batches, desc='Computing eval metrics') if self.rank == 0 else self.eval_batches):
             local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
             with torch.no_grad():
-                _, eval_metrics = self.get_batch_metrics(local_eval_batch,
-                                                         self.config.loss,
-                                                         train=False)
+                _, eval_metrics = self.get_batch_metrics(local_eval_batch, self.config.loss, train=False)
 
             for k, v in eval_metrics.items():
                 all_eval_metrics[k].extend(v)
 
-        # if self.config.sample_during_eval:
-        #     if self.config.n_eval_model_samples < self.config.eval_batch_size:
-        #         rank0_print(f'Warning: n_eval_model_samples ({self.config.n_eval_model_samples}) < eval_batch_size ({self.config.eval_batch_size}). Sampling from the first complete eval batch of prompts.')
-        #         sample_batches = self.eval_batches[:1]
-        #     else:
-        #         n_sample_batches = self.config.n_eval_model_samples // self.config.eval_batch_size
-        #         sample_batches = self.eval_batches[:n_sample_batches]
-
-        #     for eval_batch in (tqdm.tqdm(sample_batches,
-        #                                  desc='Generating samples...')
-        #                        if self.rank == 0 else sample_batches):
-        #         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
-        #         policy_samples, reference_samples = self.get_batch_samples(local_eval_batch)
-
-        #         all_policy_samples.extend(policy_samples)
-        #         all_reference_samples.extend(reference_samples)
-
-        #         for prompt, sample in zip(eval_batch['prompt'], policy_samples):
-        #             policy_text_table.add_data(self.example_counter, prompt, sample)
-
-        #         if self.config.loss.name in {'dpo', 'ipo'}:
-        #             for prompt, sample in zip(eval_batch['prompt'], reference_samples):
-        #                 reference_text_table.add_data(self.example_counter, prompt, sample)
-
-        mean_eval_metrics = {
-            k: sum(v) / len(v)
-            for k, v in all_eval_metrics.items()
-        }
+        mean_eval_metrics = { k: sum(v) / len(v) for k, v in all_eval_metrics.items() }
 
         rank0_print(f'eval after {self.example_counter}: {formatted_dict(mean_eval_metrics)}')
-
-        # if self.config.sample_during_eval:
-        #     rank0_print(json.dumps(all_policy_samples[:10], indent=2))
-        #     if self.config.loss.name in {'dpo', 'ipo'}:
-        #         rank0_print(json.dumps(all_reference_samples[:10], indent=2))
 
         if self.config.tensorboard.enabled and self.rank == 0:
             for k, v in mean_eval_metrics.items():
                 self.logger.add_scalar('{}'.format(k), v, self.batch_counter)
 
-            # if self.config.sample_during_eval:
-            #     self.wandb_run.log({"policy_samples": policy_text_table})
-            #     if self.config.loss.name in {'dpo', 'ipo'}:
-            #         self.wandb_run.log({"reference_samples": reference_text_table})
-
-        if self.example_counter > 0:
-            if self.config.debug:
-                rank0_print('skipping save in debug mode')
-            else:
-                output_dir = os.path.join(self.run_dir, f'step-{self.example_counter}')
-                rank0_print(f'creating checkpoint to write to {output_dir}...')
-                self.save(output_dir, mean_eval_metrics)
+        return mean_eval_metrics[f'rewards_eval/accuracies']
 
     def train(self):
         """Begin either SFT or DPO training, with periodic evaluation."""
 
-        rank0_print(f'Using {self.config.optimizer} optimizer')
+        rank0_print(f' Using {self.config.optimizer} optimizer ')
         self.optimizer = getattr(torch.optim, self.config.optimizer)(self.policy.parameters(), lr=self.config.lr)
         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda step: min(1.0, (step + 1) / (self.config.warmup_steps + 1)))
 
@@ -450,11 +396,6 @@ class BasicTrainer(object):
                 earlystop += 1
                 
                 all_eval_metrics = defaultdict(list)
-                # if self.config.sample_during_eval:
-                #     all_policy_samples, all_reference_samples = [], []
-                #     policy_text_table = wandb.Table(columns=["step", "prompt", "sample"])
-                #     if self.config.loss.name in {'dpo', 'ipo'}:
-                #         reference_text_table = wandb.Table(columns=["step", "prompt", "sample"])
 
                 for eval_batch in (tqdm.tqdm(self.eval_batches, desc='Computing eval metrics') if self.rank == 0 else self.eval_batches):
                     local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
@@ -464,46 +405,13 @@ class BasicTrainer(object):
                     for k, v in eval_metrics.items():
                         all_eval_metrics[k].extend(v)
 
-                # if self.config.sample_during_eval:
-                #     if self.config.n_eval_model_samples < self.config.eval_batch_size:
-                #         rank0_print(f'Warning: n_eval_model_samples ({self.config.n_eval_model_samples}) < eval_batch_size ({self.config.eval_batch_size}). Sampling from the first complete eval batch of prompts.')
-                #         sample_batches = self.eval_batches[:1]
-                #     else:
-                #         n_sample_batches = self.config.n_eval_model_samples // self.config.eval_batch_size
-                #         sample_batches = self.eval_batches[:n_sample_batches]
-                #     for eval_batch in (tqdm.tqdm(sample_batches, desc='Generating samples...') if self.rank == 0 else sample_batches):
-                #         local_eval_batch = slice_and_move_batch_for_device(eval_batch, self.rank, self.world_size, self.rank)
-                #         policy_samples, reference_samples = self.get_batch_samples(local_eval_batch)
+                mean_eval_metrics = { k: sum(v) / len(v) for k, v in all_eval_metrics.items() }
 
-                #         all_policy_samples.extend(policy_samples)
-                #         all_reference_samples.extend(reference_samples)
-
-                #         for prompt, sample in zip(eval_batch['prompt'], policy_samples):
-                #             policy_text_table.add_data(self.example_counter, prompt, sample)
-                #         if self.config.loss.name in {'dpo', 'ipo'}:
-                #             for prompt, sample in zip(eval_batch['prompt'], reference_samples):
-                #                 reference_text_table.add_data(self.example_counter, prompt, sample)
-
-                mean_eval_metrics = {
-                    k: sum(v) / len(v)
-                    for k, v in all_eval_metrics.items()
-                }
-                rank0_print(
-                    f'eval after {self.example_counter}: {formatted_dict(mean_eval_metrics)}'
-                )
-                # if self.config.sample_during_eval:
-                #     rank0_print(json.dumps(all_policy_samples[:10], indent=2))
-                #     if self.config.loss.name in {'dpo', 'ipo'}:
-                #         rank0_print(json.dumps(all_reference_samples[:10], indent=2))
+                rank0_print(f'eval after {self.example_counter}: {formatted_dict(mean_eval_metrics)}')
 
                 if self.config.tensorboard.enabled and self.rank == 0:
                     for k, v in mean_eval_metrics.items():
                         self.logger.add_scalar('{}'.format(k), v, self.batch_counter)
-
-                    # if self.config.sample_during_eval:
-                    #     self.wandb_run.log({"policy_samples": policy_text_table})
-                    #     if self.config.loss.name in {'dpo', 'ipo'}:
-                    #         self.wandb_run.log({"reference_samples": reference_text_table})
 
                 # if self.example_counter > 0:
                 #     if self.config.debug:
@@ -513,7 +421,7 @@ class BasicTrainer(object):
                 #         rank0_print(f'creating checkpoint to write to {output_dir}...')
                 #         self.save(output_dir, mean_eval_metrics)
 
-                if earlystop >= 5:
+                if earlystop >= 2:
                     break
                     
             #### END EVALUATION ####
@@ -527,6 +435,7 @@ class BasicTrainer(object):
                 global_microbatch = slice_and_move_batch_for_device(batch, microbatch_idx, self.config.gradient_accumulation_steps, self.rank)
                 local_microbatch = slice_and_move_batch_for_device(global_microbatch, self.rank, self.world_size, self.rank)
                 loss, metrics = self.get_batch_metrics(local_microbatch, self.config.loss, train=True)
+                loss = loss * self.decay
                 (loss / self.config.gradient_accumulation_steps).backward()
 
                 for k, v in metrics.items():
@@ -546,10 +455,7 @@ class BasicTrainer(object):
             self.example_counter += self.config.batch_size
 
             if last_log is None or time.time() - last_log > self.config.minimum_log_interval_secs:
-                mean_train_metrics = {
-                    k: sum(v) / len(v)
-                    for k, v in batch_metrics.items()
-                }
+                mean_train_metrics = { k: sum(v) / len(v) for k, v in batch_metrics.items() }
                 mean_train_metrics['counters/examples'] = self.example_counter
                 mean_train_metrics['counters/updates'] = self.batch_counter
                 rank0_print(f'train stats after {self.example_counter} examples: {formatted_dict(mean_train_metrics)}')
@@ -609,6 +515,7 @@ class FSDPTrainer(BasicTrainer):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
+                 decay: float,
                  logger_dir: str,
                  client_idx: int,
                  policy: nn.Module,
@@ -625,7 +532,7 @@ class FSDPTrainer(BasicTrainer):
            Models are sharded at the block level, where the block class name is provided in the config.
         """
 
-        super().__init__(batch_counter, example_counter, logger_dir, client_idx, policy, config, seed, run_dir, dataset,
+        super().__init__(batch_counter, example_counter, decay, logger_dir, client_idx, policy, config, seed, run_dir, dataset,
                          reference_model, rank, world_size)
         assert config.model.block_name is not None, 'must specify model.block_name (e.g., GPT2Block or GPTNeoXLayer) for FSDP'
         
@@ -723,6 +630,7 @@ class TensorParallelTrainer(BasicTrainer):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
+                 decay: float,
                  logger_dir: str,
                  client_idx: int,
                  policy,
@@ -737,7 +645,7 @@ class TensorParallelTrainer(BasicTrainer):
            Based on https://github.com/BlackSamorez/tensor_parallel. Note sampling is extremely slow,
               see https://github.com/BlackSamorez/tensor_parallel/issues/66.
         """
-        super().__init__(batch_counter, example_counter, logger_dir, client_idx, policy, config, seed, run_dir, reference_model, rank,
+        super().__init__(batch_counter, example_counter, decay, logger_dir, client_idx, policy, config, seed, run_dir, reference_model, rank,
                          world_size)
 
         rank0_print('Sharding policy...')

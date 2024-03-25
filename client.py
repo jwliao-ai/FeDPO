@@ -5,11 +5,13 @@ from utils import init_distributed, get_local_dir, make_logger_path
 import torch.multiprocessing as mp
 import trainers
 from typing import Optional, Set
+from collections import defaultdict
 import resource
 import copy
 import os
 from omegaconf import OmegaConf, DictConfig
 from tensorboardX import SummaryWriter
+from trainers import get_batch_iterator
 
 class Client:
 
@@ -18,24 +20,40 @@ class Client:
                  local_train_data: dict, 
                  local_eval_data: dict, 
                  config: DictConfig,
-                 TrainerClass, 
                  policy: nn.Module = None):
         
         self.client_idx = client_idx
         self.batch_counter = 0
         self.example_counter = 0
-        self.round_counter = 0
+        self.decay = 1.0
 
         self.data = {"train": local_train_data, "test": local_eval_data}
         self.train_sample_num = len(local_train_data)
-
         self.config = config
-
         self.policy = policy
-        self.TrainerClass = TrainerClass
-
         self.logger_dir = make_logger_path(f"Client-{self.client_idx}", config)
+        self.eval_acc = 0.
+        self.device = torch.device("cuda")
         
+    def test(self, server_acc, reference_model: Optional[nn.Module] = None):
+
+        trainer = trainers.BasicTrainer(self.batch_counter,
+                                        self.example_counter,
+                                        self.decay,
+                                        self.logger_dir,
+                                        self.client_idx,
+                                        self.policy,
+                                        self.config,
+                                        self.config.seed,
+                                        self.config.local_run_dir,
+                                        dataset=self.data,
+                                        reference_model=reference_model,
+                                        rank=0,
+                                        world_size=1)
+        self.eval_acc = trainer.test()
+        if self.eval_acc <= server_acc:
+            self.decay *= self.config.decay_rate
+
     def train(self, reference_model: Optional[nn.Module] = None):
 
         if 'FSDP' in self.config.trainer:
@@ -50,7 +68,7 @@ class Client:
                      join=True)
         else:
             print('starting single-process worker')
-            self.worker_main(0, 1, reference_model)        
+            self.worker_main(0, 1, reference_model)
 
         self.batch_counter += 310
         self.example_counter += 19840
@@ -65,23 +83,31 @@ class Client:
 
         print(f'Creating trainer on process {rank} with world size {world_size}')
 
-        trainer = self.TrainerClass(self.batch_counter,
-                                    self.example_counter,
-                                    self.logger_dir,
-                                    self.client_idx,
-                                    self.policy,
-                                    self.config,
-                                    self.config.seed,
-                                    self.config.local_run_dir,
-                                    dataset=self.data,
-                                    reference_model=reference_model,
-                                    rank=rank,
-                                    world_size=world_size)
+        TrainerClass = getattr(trainers, self.config.trainer)
+        trainer = TrainerClass(self.batch_counter,
+                               self.example_counter,
+                               self.decay,
+                               self.logger_dir,
+                               self.client_idx,
+                               self.policy,
+                               self.config,
+                               self.config.seed,
+                               self.config.local_run_dir,
+                               dataset=self.data,
+                               reference_model=reference_model,
+                               rank=rank,
+                               world_size=world_size)
         trainer.train()
         trainer.save()
 
     def get_policy_params(self):
-        return copy.deepcopy(self.policy.state_dict())
+        for param in self.policy.parameters():
+            param.detach()
+        return self.policy.parameters()
     
     def get_train_sample_num(self):
         return self.train_sample_num
+
+    def set_parameters(self, policy_global):
+        for old_param, new_param in zip(self.policy.parameters(), policy_global.parameters()):
+            old_param.data = new_param.data.clone().to(self.device)
