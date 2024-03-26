@@ -75,10 +75,10 @@ class Client:
             message = parent_conn.recv()
             self.example_counter = message['counters'][0]
             self.batch_counter = message['counters'][1]
-            parameters = message['parameters']
+            tmp_policy = message['policy']
 
-        for param_list in parameters:
-            for old_param, new_param
+        self.set_parameters(tmp_policy)
+        del message
     
     def worker_main(self,
                     rank: int,
@@ -108,17 +108,15 @@ class Client:
                                world_size=world_size)
         if test:
             trainer.test()
-            if rank == 0:
-                print(trainer.eval_acc)
-                child_conn.send(trainer.eval_acc)
+            if rank == 0: child_conn.send(trainer.eval_acc)
         else:
             trainer.train()
-            message['parameters'] = []
-            message['parameters'].append(trainer.policy.parameters())
+            message = {}
+            trainer.save()
             if rank == 0:
+                message['policy'] = trainer.policy
                 message['counters'] = [trainer.example_counter, trainer.batch_counter]
                 child_conn.send(message)
-            trainer.save()
 
     def get_policy_params(self):
         return self.policy.parameters()
@@ -126,6 +124,6 @@ class Client:
     def get_train_sample_num(self):
         return self.train_sample_num
 
-    def set_parameters(self, policy_global):
-        for old_param, new_param in zip(self.policy.parameters(), policy_global.parameters()):
+    def set_parameters(self, new_policy: nn.Module):
+        for old_param, new_param in zip(self.policy.parameters(), new_policy.parameters()):
             old_param.data = new_param.data.clone()

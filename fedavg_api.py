@@ -145,10 +145,10 @@ class FedAvgAPI(object):
         
         if self.config.server_train:
             trainer.train()
+            trainer.save()
         else:
             trainer.test()
             if rank == 0: child_conn.send(trainer.eval_acc)
-        trainer.save()
 
     def aggregate(self, w_locals, ratios):
         for param in self.policy_global.parameters():
