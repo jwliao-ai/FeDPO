@@ -9,13 +9,13 @@ use_small_dataset: False
 server_train: False
 
 # number of client
-client_num_in_total: 1
+client_num_in_total: 10
 
 # data distributed evenly or not
 data_evenly_distributed: true
 
 # frequency of communication
-comm_round: 5
+comm_round: 1000
 
 # frequency of test
 frequency_of_the_test: 1

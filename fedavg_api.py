@@ -59,11 +59,6 @@ class FedAvgAPI(object):
             logging.info("-"*20 + f" Communication Round: {round_idx} " + "-"*20)
             logging.info("-"*64)
 
-            if round_idx == self.config.comm_round - 1:
-                self._global_test(round_idx)
-            elif round_idx % self.config.frequency_of_the_test == 0:
-                self._global_test(round_idx)
-
             w_locals = []
             ratios = []
             client_accs = []
@@ -88,11 +83,18 @@ class FedAvgAPI(object):
             self.aggregate(w_locals, ratios)
             print("-"*20 + f" Round: {round_idx} Aggregation (END) " + "-"*20)
             self.send_parameters()
+            
+            if round_idx == self.config.comm_round - 1:
+                self._global_test(round_idx)
+            elif round_idx % self.config.frequency_of_the_test == 0:
+                self._global_test(round_idx)
 
     def _global_test(self, round_idx):
 
         print("-"*20 + f" Round: {round_idx} Global test (START) " + "-"*20)
 
+        parent_conn, child_conn = mp.Pipe()
+        
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
             print('starting', world_size, 'processes for FSDP training')
@@ -101,23 +103,24 @@ class FedAvgAPI(object):
             print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
             mp.spawn(self.worker_main,
                      nprocs=world_size,
-                     args=(world_size, self.reference_model),
+                     args=(world_size, child_conn, self.reference_model),
                      join=True)
         else:
             print('starting single-process worker')
-            self.worker_main(0, 1, self.reference_model)
+            self.worker_main(0, 1, child_conn, self.reference_model)
+
+        while parent_conn.poll():
+            self.acc_global = parent_conn.recv()
         
         logging.info("-"*20 + f" Round: {round_idx}: Accuracy of Server is: {self.acc_global} " + "-"*20)
         print("-"*20 + f" Round: {round_idx}: Global test (END) " + "-"*20)
 
         self.logger.add_scalar(f"avg_acc/server", self.acc_global, round_idx)
-
-        self.global_batch_counter += 310 * self.config.client_num_in_total
-        self.global_example_counter += 19840 * self.config.client_num_in_total
         
     def worker_main(self,
                     rank: int,
                     world_size: int,
+                    child_conn,
                     reference_model: Optional[nn.Module] = None):
         """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
         if 'FSDP' in self.config.trainer:
@@ -128,7 +131,7 @@ class FedAvgAPI(object):
         TrainerClass = getattr(trainers, self.config.trainer)
         trainer = TrainerClass(self.global_batch_counter,
                                self.global_example_counter,
-                               1,
+                               1.,
                                self.logger_dir,
                                999,
                                self.policy_global,
@@ -140,13 +143,11 @@ class FedAvgAPI(object):
                                rank=rank,
                                world_size=world_size)
         
-        logging.info("-"*20 + f" Server has {len(self.data_global['train'])} samples for training and {len(self.data_global['test'])} samples for testing " + "-"*20)
-        
         if self.config.server_train:
             trainer.train()
         else:
             trainer.test()
-            if rank == 0: self.acc_global = trainer.eval_acc
+            if rank == 0: child_conn.send(trainer.eval_acc)
         trainer.save()
 
     def aggregate(self, w_locals, ratios):

@@ -31,6 +31,8 @@ class Client:
         
     def test(self, server_acc, reference_model: Optional[nn.Module] = None):
 
+        parent_conn, child_conn = mp.Pipe()
+        
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
             print('starting', world_size, 'processes for FSDP training')
@@ -39,17 +41,22 @@ class Client:
             print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
             mp.spawn(self.worker_main,
                      nprocs=world_size,
-                     args=(world_size, reference_model, True),
+                     args=(world_size, child_conn, reference_model, True),
                      join=True)
         else:
             print('starting single-process worker')
-            self.worker_main(0, 1, reference_model, True)
+            self.worker_main(0, 1, child_conn, reference_model, True)
 
+        while parent_conn.poll():
+            self.eval_acc = parent_conn.recv()
+            
         if self.eval_acc <= server_acc:
             self.decay *= self.config.decay_rate
 
     def train(self, reference_model: Optional[nn.Module] = None):
 
+        parent_conn, child_conn = mp.Pipe()
+        
         if 'FSDP' in self.config.trainer:
             world_size = torch.cuda.device_count()
             print('starting', world_size, 'processes for FSDP training')
@@ -58,18 +65,25 @@ class Client:
             print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
             mp.spawn(self.worker_main,
                      nprocs=world_size,
-                     args=(world_size, reference_model, False),
+                     args=(world_size, child_conn, reference_model, False),
                      join=True)
         else:
             print('starting single-process worker')
-            self.worker_main(0, 1, reference_model, False)
+            self.worker_main(0, 1, child_conn, reference_model, False)
 
-        self.batch_counter += 310
-        self.example_counter += 19840
+        while parent_conn.poll():
+            message = parent_conn.recv()
+            self.example_counter = message['counters'][0]
+            self.batch_counter = message['counters'][1]
+            parameters = message['parameters']
+
+        for param_list in parameters:
+            for old_param, new_param
     
     def worker_main(self,
                     rank: int,
                     world_size: int,
+                    child_conn,
                     reference_model: Optional[nn.Module] = None,
                     test: bool = False):
         """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
@@ -94,9 +108,16 @@ class Client:
                                world_size=world_size)
         if test:
             trainer.test()
-            if rank == 0: self.eval_acc = trainer.eval_acc
+            if rank == 0:
+                print(trainer.eval_acc)
+                child_conn.send(trainer.eval_acc)
         else:
             trainer.train()
+            message['parameters'] = []
+            message['parameters'].append(trainer.policy.parameters())
+            if rank == 0:
+                message['counters'] = [trainer.example_counter, trainer.batch_counter]
+                child_conn.send(message)
             trainer.save()
 
     def get_policy_params(self):
