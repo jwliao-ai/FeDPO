@@ -6,7 +6,7 @@ temp_a: 0.1
 use_small_dataset: False
 
 # train on server
-server_train: False
+server_not_train: true
 
 # number of client
 client_num_in_total: 10

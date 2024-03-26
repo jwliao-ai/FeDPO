@@ -63,7 +63,7 @@ class FedAvgAPI(object):
                 self._global_test(round_idx)
             elif round_idx % self.config.frequency_of_the_test == 0:
                 self._global_test(round_idx)
-                
+
             w_locals = []
             ratios = []
             client_accs = []
@@ -103,11 +103,11 @@ class FedAvgAPI(object):
             print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
             mp.spawn(self.worker_main,
                      nprocs=world_size,
-                     args=(world_size, child_conn, self.reference_model),
+                     args=(world_size, child_conn, self.reference_model, self.config.server_not_train),
                      join=True)
         else:
             print('starting single-process worker')
-            self.worker_main(0, 1, child_conn, self.reference_model)
+            self.worker_main(0, 1, child_conn, self.reference_model, self.config.server_not_train)
 
         while parent_conn.poll():
             self.acc_global = parent_conn.recv()
@@ -121,7 +121,8 @@ class FedAvgAPI(object):
                     rank: int,
                     world_size: int,
                     child_conn,
-                    reference_model: Optional[nn.Module] = None):
+                    reference_model: Optional[nn.Module] = None,
+                    test: bool = True):
         """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
         if 'FSDP' in self.config.trainer:
             init_distributed(rank, world_size, port=self.config.fsdp_port)
@@ -143,12 +144,12 @@ class FedAvgAPI(object):
                                rank=rank,
                                world_size=world_size)
         
-        if self.config.server_train:
-            trainer.train()
-            trainer.save()
-        else:
+        if test:
             trainer.test()
             if rank == 0: child_conn.send(trainer.eval_acc)
+        else:
+            trainer.train()
+            trainer.save()
 
     def aggregate(self, w_locals, ratios):
         for param in self.policy_global.parameters():
