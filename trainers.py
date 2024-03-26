@@ -367,7 +367,7 @@ class BasicTrainer(object):
             for k, v in mean_eval_metrics.items():
                 self.logger.add_scalar('{}'.format(k), v, self.batch_counter)
 
-        return mean_eval_metrics[f'rewards_eval/accuracies']
+        self.eval_acc = mean_eval_metrics[f'rewards_eval/accuracies']
 
     def train(self):
         """Begin either SFT or DPO training, with periodic evaluation."""

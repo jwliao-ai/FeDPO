@@ -8,7 +8,7 @@ import trainers
 import numpy as np
 
 from client import Client
-from utils import make_logger_path
+from utils import make_logger_path, init_distributed
 from omegaconf import OmegaConf, DictConfig
 from typing import Optional, Set
 from tensorboardX import SummaryWriter
@@ -87,28 +87,26 @@ class FedAvgAPI(object):
             ratios = ratios / sum(ratios)
             self.aggregate(w_locals, ratios)
             print("-"*20 + f" Round: {round_idx} Aggregation (END) " + "-"*20)
-            
             self.send_parameters()
 
     def _global_test(self, round_idx):
 
         print("-"*20 + f" Round: {round_idx} Global test (START) " + "-"*20)
 
-        trainer = trainers.BasicTrainer(self.global_batch_counter,
-                                        self.global_example_counter,
-                                        1,
-                                        self.logger_dir,
-                                        999,
-                                        self.policy_global,
-                                        self.config,
-                                        self.config.seed,
-                                        self.config.local_run_dir,
-                                        self.data_global,
-                                        self.reference_model,
-                                        0, 1)
+        if 'FSDP' in self.config.trainer:
+            world_size = torch.cuda.device_count()
+            print('starting', world_size, 'processes for FSDP training')
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+            print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
+            mp.spawn(self.worker_main,
+                     nprocs=world_size,
+                     args=(world_size, self.reference_model),
+                     join=True)
+        else:
+            print('starting single-process worker')
+            self.worker_main(0, 1, self.reference_model)
         
-        self.acc_global = trainer.test()
-
         logging.info("-"*20 + f" Round: {round_idx}: Accuracy of Server is: {self.acc_global} " + "-"*20)
         print("-"*20 + f" Round: {round_idx}: Global test (END) " + "-"*20)
 
@@ -116,66 +114,47 @@ class FedAvgAPI(object):
 
         self.global_batch_counter += 310 * self.config.client_num_in_total
         self.global_example_counter += 19840 * self.config.client_num_in_total
-
-    # def _global_test(self, round_idx):
-
-    #     logging.info("#"*20 + f" global_test : {round_idx} " + "#"*20)
-
-    #     if 'FSDP' in self.config.trainer:
-    #         world_size = torch.cuda.device_count()
-    #         print('starting', world_size, 'processes for FSDP training')
-    #         soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    #         resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
-    #         print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
-    #         mp.spawn(self.worker_main,
-    #                  nprocs=world_size,
-    #                  args=(world_size, self.reference_model),
-    #                  join=True)
-    #     else:
-    #         print('starting single-process worker')
-    #         self.worker_main(0, 1, self.reference_model)
-
-    #     self.global_batch_counter += 310 * self.config.client_num_in_total
-    #     self.global_example_counter += 19840 * self.config.client_num_in_total
         
-    # def worker_main(self,
-    #                 rank: int,
-    #                 world_size: int,
-    #                 reference_model: Optional[nn.Module] = None):
-    #     """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
-    #     if 'FSDP' in self.config.trainer:
-    #         init_distributed(rank, world_size, port=self.config.fsdp_port)
+    def worker_main(self,
+                    rank: int,
+                    world_size: int,
+                    reference_model: Optional[nn.Module] = None):
+        """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
+        if 'FSDP' in self.config.trainer:
+            init_distributed(rank, world_size, port=self.config.fsdp_port)
 
-    #     print(f'Creating trainer on process {rank} with world size {world_size}')
+        print(f'Creating trainer on process {rank} with world size {world_size}')
 
-    #     TrainerClass = getattr(trainers, self.config.trainer)
-    #     trainer = TrainerClass(self.global_batch_counter,
-    #                            self.global_example_counter,
-    #                            self.logger_dir,
-    #                            999,
-    #                            self.policy_global,
-    #                            self.config,
-    #                            self.config.seed,
-    #                            self.config.local_run_dir,
-    #                            dataset=self.data_global,
-    #                            reference_model=reference_model,
-    #                            rank=rank,
-    #                            world_size=world_size)
+        TrainerClass = getattr(trainers, self.config.trainer)
+        trainer = TrainerClass(self.global_batch_counter,
+                               self.global_example_counter,
+                               1,
+                               self.logger_dir,
+                               999,
+                               self.policy_global,
+                               self.config,
+                               self.config.seed,
+                               self.config.local_run_dir,
+                               dataset=self.data_global,
+                               reference_model=reference_model,
+                               rank=rank,
+                               world_size=world_size)
         
-    #     logging.info("-"*20 + f" Server has {len(self.data_global['train'])} samples for training and {len(self.data_global['test'])} samples for testing " + "-"*20)
+        logging.info("-"*20 + f" Server has {len(self.data_global['train'])} samples for training and {len(self.data_global['test'])} samples for testing " + "-"*20)
         
-    #     if self.config.server_train:
-    #         trainer.train()
-    #     else:
-    #         trainer.test()
-    #     trainer.save()
+        if self.config.server_train:
+            trainer.train()
+        else:
+            trainer.test()
+            if rank == 0: self.acc_global = trainer.eval_acc
+        trainer.save()
 
     def aggregate(self, w_locals, ratios):
         for param in self.policy_global.parameters():
             param.data = torch.zeros_like(param.data)
         for i, w_local in enumerate(w_locals):
             for policy_global_param, policy_local_param in zip(self.policy_global.parameters(), w_local):
-                policy_global_param.data = policy_global_param.data + policy_local_param.data.cpu().clone() * ratios[i]
+                policy_global_param.data = policy_global_param.data + policy_local_param.data.clone() * ratios[i]
 
     def send_parameters(self):
         for client in self.client_list:
