@@ -58,7 +58,12 @@ class FedAvgAPI(object):
             logging.info("-"*64)
             logging.info("-"*20 + f" Communication Round: {round_idx} " + "-"*20)
             logging.info("-"*64)
-
+            
+            if round_idx == self.config.comm_round - 1:
+                self._global_test(round_idx)
+            elif round_idx % self.config.frequency_of_the_test == 0:
+                self._global_test(round_idx)
+                
             w_locals = []
             ratios = []
             client_accs = []
@@ -83,11 +88,6 @@ class FedAvgAPI(object):
             self.aggregate(w_locals, ratios)
             print("-"*20 + f" Round: {round_idx} Aggregation (END) " + "-"*20)
             self.send_parameters()
-            
-            if round_idx == self.config.comm_round - 1:
-                self._global_test(round_idx)
-            elif round_idx % self.config.frequency_of_the_test == 0:
-                self._global_test(round_idx)
 
     def _global_test(self, round_idx):
 
