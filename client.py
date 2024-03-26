@@ -78,7 +78,7 @@ class Client:
             self.batch_counter = message[1]
         del message
 
-        self.policy.load_state_dict(torch.load(os.path.join(self.run_dir, f'client-{self.client_idx}-LATEST', 'policy.pt'))['state'])
+        self.policy.load_state_dict(torch.load(os.path.join(self.config.local_run_dir, f'client-{self.client_idx}-LATEST', 'policy.pt'))['state'])
 
     def worker_main(self,
                     rank: int,
