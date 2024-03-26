@@ -7,6 +7,7 @@ import trainers
 from typing import Optional, Set
 import resource
 from omegaconf import OmegaConf, DictConfig
+import os
 
 class Client:
 
@@ -73,13 +74,12 @@ class Client:
 
         while parent_conn.poll():
             message = parent_conn.recv()
-            self.example_counter = message['counters'][0]
-            self.batch_counter = message['counters'][1]
-            tmp_policy = message['policy']
-
-        self.set_parameters(tmp_policy)
+            self.example_counter = message[0]
+            self.batch_counter = message[1]
         del message
-    
+
+        self.policy.load_state_dict(torch.load(os.path.join(self.run_dir, f'client-{self.client_idx}-LATEST', 'policy.pt'))['state'])
+
     def worker_main(self,
                     rank: int,
                     world_size: int,
@@ -111,11 +111,9 @@ class Client:
             if rank == 0: child_conn.send(trainer.eval_acc)
         else:
             trainer.train()
-            message = {}
             trainer.save()
             if rank == 0:
-                message['policy'] = trainer.policy
-                message['counters'] = [trainer.example_counter, trainer.batch_counter]
+                message = [trainer.example_counter, trainer.batch_counter]
                 child_conn.send(message)
 
     def get_policy_params(self):
