@@ -363,9 +363,9 @@ class BasicTrainer(object):
 
         rank0_print(f'eval after {self.example_counter}: {formatted_dict(mean_eval_metrics)}')
 
-        if self.config.tensorboard.enabled and self.rank == 0:
-            for k, v in mean_eval_metrics.items():
-                self.logger.add_scalar('{}'.format(k), v, self.batch_counter)
+        # if self.config.tensorboard.enabled and self.rank == 0:
+        #     for k, v in mean_eval_metrics.items():
+        #         self.logger.add_scalar('{}'.format(k), v, self.batch_counter)
 
         self.eval_acc = mean_eval_metrics[f'rewards_eval/accuracies']
 

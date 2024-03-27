@@ -9,6 +9,7 @@ import numpy as np
 import os
 
 from client import Client
+from server import Server
 from utils import make_logger_path, init_distributed
 from omegaconf import OmegaConf, DictConfig
 from typing import Optional, Set
@@ -23,15 +24,10 @@ class FedAvgAPI:
                  config: DictConfig, 
                  policy: nn.Module,
                  reference_model: nn.Module):
-        
-        self.global_batch_counter = 0
-        self.global_example_counter = 0
-        self.config = config
-        self.server_idx = 999
-        self.decay = 1.0
-
-        self.test_data = test_data
+    
         self.reference_model = reference_model
+        self.comm_round = config.comm_round
+        self.temp = config.temp
 
         self.data_global = {
             "train": global_train_data,
@@ -39,26 +35,33 @@ class FedAvgAPI:
         }
 
         self.policy_global = policy
-        self.acc_global = 0.0
 
         self.client_list = []
-        self.train_data_local = local_train_data
-        self._setup_clients(local_train_data, policy)
+        self._setup_clients(local_train_data, test_data, config, policy)
+        self._setup_server(global_train_data, test_data, config, policy)
 
-        self.logger_dir = make_logger_path(f"Server", self.config)
+        self.logger_dir = make_logger_path(f"Server", config)
         self.logger = SummaryWriter(self.logger_dir, flush_secs=1, max_queue=1)
         
-    def _setup_clients(self, local_train_data: list[dict], policy: nn.Module):
 
+    def _setup_clients(self, local_train_data: list[dict], test_data: dict, config: DictConfig, policy: nn.Module):
         print("-"*20 + " Setup clients (START) " + "-"*20)
         for client_idx in range(self.config.client_num_in_total):
-            c = Client(client_idx, local_train_data[client_idx], self.test_data, self.config, copy.deepcopy(policy))
+            c = Client(client_idx, local_train_data[client_idx], test_data, config, copy.deepcopy(policy))
             self.client_list.append(c)
-            self.server = Client(999, self.data_global['train'], self.data_global['test'], self.config, copy.deepcopy(policy))
         print("-"*20 + " Setup clients (END) " + "-"*20)
 
+
+    def _setup_server(self, global_train_data: dict, global_eval_data: dict, config: DictConfig, policy: nn.Module):
+        print("-"*20 + " Setup server (START) " + "-"*20)
+        self.server = Server(global_train_data, global_eval_data, config, copy.deepcopy(policy))
+        print("-"*20 + " Setup server (END) " + "-"*20)
+
+
     def train(self):
-        for round_idx in range(self.config.comm_round):
+
+        for round_idx in range(self.comm_round):
+
             logging.info("-"*64)
             logging.info("-"*20 + f" Communication Round: {round_idx} " + "-"*20)
             logging.info("-"*64)
@@ -73,25 +76,23 @@ class FedAvgAPI:
             client_accs = []
 
             for client in self.client_list:
+                assert type(client) == Client
                 print("-"*20 + f" Round {round_idx}: Client {client.client_idx} training (START) " + "-"*20)
-                print(f"client {client.client_idx} has {client.train_sample_num} samples for traininig...")
-                client.train(self.reference_model)
+                print(f"Client {client.client_idx} has {client.train_sample_num} samples for traininig...")
+                client.train(self.server.acc, self.reference_model)
                 print("-"*20 + f" Round {round_idx}: Client {client.client_idx} training (END) " + "-"*20)
-                # print("-"*20 + f" Round {round_idx}: Client {client.client_idx} testing (START) " + "-"*20)
-                # client.test(self.acc_global, self.reference_model)
-                logging.info("-"*20 + f" Round {round_idx}, Accuracy of Client-{client.client_idx}: {client.eval_acc}.")
-                # print("-"*20 + f" Round {round_idx}: Client {client.client_idx} testing (END) " + "-"*20)
+                logging.info("-"*20 + f" Round {round_idx}, Accuracy of Client-{client.client_idx}: {client.acc}.")
                 w_locals.append(client.get_policy_params())
-                client_accs.append(client.eval_acc)
-                ratios.append(np.exp(self.config.temp_a * client.eval_acc))
-                self.logger.add_scalar(f"acc/client-{client.client_idx}", client.eval_acc, round_idx)
+                client_accs.append(client.acc)
+                ratios.append(np.exp(self.temp * client.acc))
+                self.logger.add_scalar(f"acc/client-{client.client_idx}", client.acc, round_idx)
 
             self.logger.add_scalar(f"avg_acc/client", np.mean(client_accs), round_idx)
-            print("-"*20 + f" Round: {round_idx} Aggregation (START) " + "-"*20)
+            print("-"*20 + f" Round {round_idx}: Aggregation (START) " + "-"*20)
             ratios = ratios / sum(ratios)
             logging.info("-"*20 + f" Round: {round_idx} Ratios: {ratios} " + "-"*20)
             self.aggregate(w_locals, ratios)
-            print("-"*20 + f" Round: {round_idx} Aggregation (END) " + "-"*20)
+            print("-"*20 + f" Round {round_idx}: Aggregation (END) " + "-"*20)
             self.send_parameters()
 
 
@@ -99,80 +100,28 @@ class FedAvgAPI:
 
         print("-"*20 + f" Round {round_idx}: Global test (START) " + "-"*20)
 
-        # parent_conn, child_conn = mp.Pipe()
+        self.server.test(self.reference_model)
+        self.acc_global = self.server.acc
         
-        # if 'FSDP' in self.config.trainer:
-        #     world_size = torch.cuda.device_count()
-        #     print('starting', world_size, 'processes for FSDP training')
-        #     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        #     resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
-        #     print(f'setting RLIMIT_NOFILE soft limit to {hard} from {soft}')
-        #     mp.spawn(self.worker_main, 
-        #              nprocs=world_size, 
-        #              args=(world_size, child_conn, self.reference_model), 
-        #              join=True)
-        # else:
-        #     print('starting single-process worker')
-        #     self.worker_main(0, 1, child_conn, self.reference_model)
-
-        # while parent_conn.poll():
-        #     self.acc_global = parent_conn.recv()
-
-        self.server.test(1.0, self.reference_model)
-        self.acc_global = self.server.eval_acc
-        
-        logging.info("-"*20 + f" Round: {round_idx}: Accuracy of Server is: {self.acc_global} " + "-"*20)
+        logging.info("-"*20 + f" Round: {round_idx}: Accuracy of server is: {self.server.acc} " + "-"*20)
         print("-"*20 + f" Round: {round_idx}: Global test (END) " + "-"*20)
 
-        self.logger.add_scalar(f"avg_acc/server", self.acc_global, round_idx)
-        
-    # def worker_main(self,
-    #                 rank: int,
-    #                 world_size: int,
-    #                 child_conn,
-    #                 reference_model: Optional[nn.Module] = None):
-    #     """Main function for each worker process (may be only 1 for BasicTrainer/TensorParallelTrainer)."""
-    #     if 'FSDP' in self.config.trainer:
-    #         init_distributed(rank, world_size, port=self.config.fsdp_port)
+        self.logger.add_scalar(f"avg_acc/server", self.server.acc, round_idx)
+ 
 
-    #     print(f'Creating trainer on process {rank} with world size {world_size}')
-
-    #     TrainerClass = getattr(trainers, self.config.trainer)
-    #     trainer = TrainerClass(self.global_batch_counter,
-    #                            self.global_example_counter,
-    #                            self.decay,
-    #                            self.logger_dir,
-    #                            self.server_idx,
-    #                            self.policy_global,
-    #                            self.config,
-    #                            self.config.seed,
-    #                            self.config.local_run_dir,
-    #                            dataset=self.data_global,
-    #                            reference_model=reference_model,
-    #                            rank=rank,
-    #                            world_size=world_size)
-        
-    #     if self.config.server_not_train:
-    #         trainer.test()
-    #         if rank == 0: child_conn.send(trainer.eval_acc)
-    #     else:
-    #         trainer.train()
-    #         trainer.save()
-
-    # def aggregate(self, w_locals, ratios):
-    #     for param in self.policy_global.parameters():
-    #         param.data = torch.zeros_like(param.data)
-    #     for i, w_local in enumerate(w_locals):
-    #         for policy_global_param, policy_local_param in zip(self.policy_global.parameters(), w_local):
-    #             policy_global_param.data = policy_global_param.data + policy_local_param.data.clone() * ratios[i]
-    
-    def aggregate(self, w_locals, ratios):
-        self.server.reset_parameters()
+    def aggregate(self, w_locals, ratios: list):
+        self.reset_global_policy()
         for i, w_local in enumerate(w_locals):
-            for policy_global_param, policy_local_param in zip(self.policy_global.parameters(), w_local):
-                policy_global_param.data = policy_global_param.data + policy_local_param.data.clone() * ratios[i]
+            for global_param, local_param in zip(self.policy_global.parameters(), w_local):
+                global_param.data = global_param.data + local_param.data.clone() * ratios[i]
         self.server.set_parameters(self.policy_global)
+
 
     def send_parameters(self):
         for client in self.client_list:
             client.set_parameters(self.policy_global)
+
+
+    def reset_global_policy(self):
+        for param in self.policy_global.parameters():
+            param.data = torch.zeros_like(param.data)
