@@ -28,7 +28,7 @@ class Client:
         self.config = config
         self.policy = policy
         self.logger_dir = make_logger_path(f"Client-{self.client_idx}", config)
-        self.eval_acc = 0.
+        self.eval_acc = 0.0
         
     def test(self, server_acc, reference_model: Optional[nn.Module] = None):
 
@@ -76,6 +76,7 @@ class Client:
             message = parent_conn.recv()
             self.example_counter = message[0]
             self.batch_counter = message[1]
+            self.eval_acc = message[2]
         del message
 
         self.policy.load_state_dict(torch.load(os.path.join(self.config.local_run_dir, f'client-{self.client_idx}-LATEST', 'policy.pt'))['state'])
@@ -113,7 +114,7 @@ class Client:
             trainer.train()
             trainer.save()
             if rank == 0:
-                message = [trainer.example_counter, trainer.batch_counter]
+                message = [trainer.example_counter, trainer.batch_counter, trainer.eval_acc]
                 child_conn.send(message)
 
     def get_policy_params(self):
@@ -125,3 +126,7 @@ class Client:
     def set_parameters(self, new_policy: nn.Module):
         for old_param, new_param in zip(self.policy.parameters(), new_policy.parameters()):
             old_param.data = new_param.data.clone()
+
+    def reset_parameters(self):
+        for param in self.policy.parameters():
+            param.data = torch.zeros_like(param.data)

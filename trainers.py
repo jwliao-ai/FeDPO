@@ -413,6 +413,8 @@ class BasicTrainer(object):
                     for k, v in mean_eval_metrics.items():
                         self.logger.add_scalar('{}'.format(k), v, self.batch_counter)
 
+                self.eval_acc = mean_eval_metrics[f'rewards_eval/accuracies']
+
                 # if self.example_counter > 0:
                 #     if self.config.debug:
                 #         rank0_print('skipping save in debug mode')
