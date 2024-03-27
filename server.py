@@ -71,6 +71,7 @@ class Server:
                                rank=rank,
                                world_size=world_size)
         trainer.test()
+        trainer.logger.close()
         if rank == 0: child_conn.send(trainer.eval_acc)
 
     def get_policy_params(self):

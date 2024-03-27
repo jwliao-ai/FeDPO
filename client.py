@@ -87,6 +87,7 @@ class Client:
                                rank=rank,
                                world_size=world_size)
         trainer.train()
+        trainer.logger.close()
         trainer.save()
         if rank == 0:
             message = [trainer.example_counter, trainer.batch_counter, trainer.eval_acc]
