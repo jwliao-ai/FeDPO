@@ -77,7 +77,7 @@ class FedAvgAPI:
                 print(f"Client {client.client_idx} has {client.train_sample_num} samples for traininig...")
                 client.train(self.server.acc, self.reference_model)
                 print("-"*20 + f" Round {round_idx}: Client {client.client_idx} training (END) " + "-"*20)
-                logging.info("-"*20 + f" Round {round_idx}, Accuracy of Client-{client.client_idx}: {client.acc}.")
+                logging.info("-"*20 + f" Round {round_idx}： Accuracy of client {client.client_idx}: {client.acc}" + "-"*20)
                 w_locals.append(client.get_policy_params())
                 client_accs.append(client.acc)
                 ratios.append(np.exp(self.temp * client.acc))
@@ -99,8 +99,8 @@ class FedAvgAPI:
         self.server.test(self.reference_model)
         self.acc_global = self.server.acc
         
-        logging.info("-"*20 + f" Round: {round_idx}: Accuracy of server is: {self.server.acc} " + "-"*20)
-        print("-"*20 + f" Round: {round_idx}: Global test (END) " + "-"*20)
+        logging.info("-"*20 + f" Round {round_idx}: Accuracy of server: {self.server.acc} " + "-"*20)
+        print("-"*20 + f" Round {round_idx}: Global test (END) " + "-"*20)
 
         self.logger.add_scalar(f"avg_acc/server", self.server.acc, round_idx)
  
