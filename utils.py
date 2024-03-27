@@ -11,9 +11,7 @@ import importlib.util
 import socket
 import os
 from typing import Dict, Union, Type, List
-import wandb
-from omegaconf import OmegaConf, DictConfig
-from logger import Logger
+from omegaconf import DictConfig
 
 def get_open_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -155,23 +153,6 @@ def init_distributed(rank: int, world_size: int, master_addr: str = 'localhost',
     dist.init_process_group(backend, rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
 
-def init_wandb(config, wandb_id, client_idx):
-
-    if config.wandb.enabled:
-        os.environ['WANDB_CACHE_DIR'] = get_local_dir(config.local_dirs)
-        wandb_run = wandb.init(
-            id=wandb_id,
-            resume="allow",
-            entity=config.wandb.entity,
-            project=config.wandb.project,
-            config=OmegaConf.to_container(config),
-            dir=get_local_dir(config.local_dirs),
-            name=config.exp_name+f"-client-{client_idx}"
-        )
-    else:
-        wandb_run = None
-
-    return wandb_run
 
 def make_logger_path(logdir_prefix: str, config: DictConfig) -> str:
     data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "./data")
