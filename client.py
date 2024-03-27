@@ -1,13 +1,13 @@
+import os
 import torch
-torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn as nn
+import resource
+torch.backends.cuda.matmul.allow_tf32 = True
 from utils import init_distributed, make_logger_path
 import torch.multiprocessing as mp
 import trainers
-from typing import Optional, Set
-import resource
 from omegaconf import DictConfig
-import os
+from typing import Optional
 
 class Client:
 

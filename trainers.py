@@ -1,11 +1,9 @@
 import torch
-
+import torch.nn as nn
 torch.backends.cuda.matmul.allow_tf32 = True
 import torch.nn.functional as F
-import torch.nn as nn
 import transformers
 from omegaconf import DictConfig
-
 import torch.distributed as dist
 from torch.distributed.fsdp import (
     FullyShardedDataParallel as FSDP,
@@ -19,7 +17,6 @@ from torch.distributed.fsdp.api import FullStateDictConfig, FullOptimStateDictCo
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 import tensor_parallel as tp
 import contextlib
-
 from preference_datasets import get_batch_iterator
 from utils import (
     slice_and_move_batch_for_device,
@@ -32,7 +29,6 @@ from utils import (
 )
 import numpy as np
 import tqdm
-
 import random
 import os
 from collections import defaultdict
@@ -40,7 +36,6 @@ import time
 import functools
 from typing import Optional, Dict, List, Union, Tuple
 from tensorboardX import SummaryWriter
-
 
 
 def preference_loss(

@@ -3,12 +3,10 @@ import logging
 import torch.nn as nn
 import torch
 import numpy as np
-
 from client import Client
 from server import Server
-from utils import make_logger_path, init_distributed
+from utils import make_logger_path
 from omegaconf import DictConfig
-from typing import Optional, Set
 from tensorboardX import SummaryWriter
 
 class FedAvgAPI:

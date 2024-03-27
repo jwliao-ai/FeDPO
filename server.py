@@ -4,7 +4,7 @@ import torch.nn as nn
 from utils import init_distributed, make_logger_path
 import torch.multiprocessing as mp
 import trainers
-from typing import Optional, Set
+from typing import Optional
 import resource
 from omegaconf import DictConfig
 
