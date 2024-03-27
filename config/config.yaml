@@ -18,7 +18,7 @@ data_evenly_distributed: true
 comm_round: 1000
 
 # frequency of test
-frequency_of_the_test: 1
+frequency_of_test: 1
 
 # random seed for batch sampling
 seed: 0

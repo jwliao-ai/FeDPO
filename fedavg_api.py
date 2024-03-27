@@ -27,12 +27,8 @@ class FedAvgAPI:
     
         self.reference_model = reference_model
         self.comm_round = config.comm_round
+        self.test_freq = config.frequency_of_test
         self.temp = config.temp
-
-        self.data_global = {
-            "train": global_train_data,
-            "test": test_data
-        }
 
         self.policy_global = policy
 
@@ -62,13 +58,13 @@ class FedAvgAPI:
 
         for round_idx in range(self.comm_round):
 
-            logging.info("-"*64)
-            logging.info("-"*20 + f" Communication Round: {round_idx} " + "-"*20)
-            logging.info("-"*64)
+            logging.info("-"*62)
+            logging.info("-"*20 + f" Communication Round {round_idx} " + "-"*20)
+            logging.info("-"*62)
                         
-            if round_idx == self.config.comm_round - 1:
+            if round_idx == self.comm_round - 1:
                 self._global_test(round_idx)
-            elif round_idx % self.config.frequency_of_the_test == 0:
+            elif round_idx % self.test_freq == 0:
                 self._global_test(round_idx)
                 
             w_locals = []
@@ -90,7 +86,7 @@ class FedAvgAPI:
             self.logger.add_scalar(f"avg_acc/client", np.mean(client_accs), round_idx)
             print("-"*20 + f" Round {round_idx}: Aggregation (START) " + "-"*20)
             ratios = ratios / sum(ratios)
-            logging.info("-"*20 + f" Round: {round_idx} Ratios: {ratios} " + "-"*20)
+            logging.info("-"*20 + f" Round {round_idx}: Client ratios: {ratios} " + "-"*20)
             self.aggregate(w_locals, ratios)
             print("-"*20 + f" Round {round_idx}: Aggregation (END) " + "-"*20)
             self.send_parameters()
