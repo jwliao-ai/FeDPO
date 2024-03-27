@@ -1,21 +1,23 @@
+# if the performance of the client after training is worse than the performance of server, do decay on client
 decay_rate: 0.995
 
+# weights entropy regularization temperature
 temp: 0.1
 
-# use small (1/100) datasets or not
+# use small (1/10) datasets
 use_small_dataset: False
 
-# train on server
+# only test on server
 server_not_train: true
 
-# number of client
+# number of clients
 client_num_in_total: 10
 
-# data distributed evenly or not
+# data distributed evenly
 data_evenly_distributed: true
 
-# frequency of communication
-comm_round: 1000
+# total communication rounds
+comm_round: 100
 
 # frequency of test
 frequency_of_test: 1
@@ -73,7 +75,7 @@ lr: 5e-7
 # number of steps to accumulate over for each batch
 #   (e.g. if batch_size=4 and gradient_accumulation_steps=2, then we will
 #   accumulate gradients over 2 microbatches of size 2)
-gradient_accumulation_steps: 1
+gradient_accumulation_steps: 2
 
 # the maximum gradient norm to clip to
 max_grad_norm: 10.0
@@ -94,7 +96,7 @@ n_examples: null
 n_eval_examples: 256
 
 # the trainer class to use (e.g. BasicTrainer, FSDPTrainer, TensorParallelTrainer)
-trainer: BasicTrainer
+trainer: FSDPTrainer
 
 # The optimizer to use; we use RMSprop because it works about as well as Adam and is more memory-efficient
 optimizer: RMSprop
@@ -114,4 +116,4 @@ minimum_log_interval_secs: 1.0
 defaults:
 - _self_
 - model: blank_model_fp32 # basic model configuration
-- loss: sft # which loss function, either sft or dpo (specify loss.beta if using dpo)
+- loss: dpo # which loss function, either sft or dpo (specify loss.beta if using dpo)

@@ -6,7 +6,7 @@ import torch.multiprocessing as mp
 import trainers
 from typing import Optional, Set
 import resource
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 import os
 
 class Client:

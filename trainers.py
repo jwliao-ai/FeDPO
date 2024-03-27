@@ -29,7 +29,6 @@ from utils import (
     get_block_class_from_model,
     rank0_print,
     get_local_dir,
-    make_logger_path
 )
 import numpy as np
 import tqdm
@@ -38,7 +37,6 @@ import random
 import os
 from collections import defaultdict
 import time
-import json
 import functools
 from typing import Optional, Dict, List, Union, Tuple
 from tensorboardX import SummaryWriter

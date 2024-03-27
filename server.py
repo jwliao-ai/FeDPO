@@ -6,8 +6,7 @@ import torch.multiprocessing as mp
 import trainers
 from typing import Optional, Set
 import resource
-from omegaconf import OmegaConf, DictConfig
-import os
+from omegaconf import DictConfig
 
 class Server:
     def __init__(self,

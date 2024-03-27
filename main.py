@@ -9,7 +9,7 @@ import hydra
 from omegaconf import OmegaConf, DictConfig
 import json
 import socket
-from typing import Optional, Set
+from typing import Set
 
 OmegaConf.register_new_resolver(
     "get_local_run_dir",

@@ -1,17 +1,13 @@
 import copy
 import logging
-import resource
-import torch.multiprocessing as mp
 import torch.nn as nn
 import torch
-import trainers
 import numpy as np
-import os
 
 from client import Client
 from server import Server
 from utils import make_logger_path, init_distributed
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 from typing import Optional, Set
 from tensorboardX import SummaryWriter
 

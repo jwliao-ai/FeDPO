@@ -1,12 +1,9 @@
 import datasets
-from torch.utils.data import DataLoader, Dataset
-from utils import get_local_dir, TemporarilySeededRandom
-from torch.nn.utils.rnn import pad_sequence
 from collections import defaultdict
 import tqdm
 import random
 from bs4 import BeautifulSoup, NavigableString
-from typing import Dict, List, Optional, Iterator, Callable, Union, Tuple
+from typing import Dict, List, Union, Tuple
 
 
 def extract_anthropic_prompt(prompt_and_response):
@@ -58,7 +55,7 @@ def get_se(
     """
 
     print(f'Loading SE dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('../autodl-tmp/datasets/stack-exchange-preferences', cache_dir=cache_dir)['train']
+    dataset = datasets.load_dataset('HuggingFaceH4/stack-exchange-preferences', cache_dir=cache_dir)['train']
     print('done')
 
     # shuffle the dataset and select 1% for test
@@ -105,7 +102,7 @@ def get_shp(
     """
 
     print(f'Loading SHP dataset ({split} split) from Local...')
-    dataset = datasets.load_dataset('../autodl-tmp/datasets/SHP', split=split, cache_dir=cache_dir)
+    dataset = datasets.load_dataset('stanfordnlp/SHP', split=split, cache_dir=cache_dir)
     print('done')
 
     data = defaultdict(lambda: defaultdict(list))
@@ -164,7 +161,7 @@ def get_hh(
     """
 
     print(f'Loading HH dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('../autodl-tmp/datasets/hh-rlhf',
+    dataset = datasets.load_dataset('Anthropic/hh-rlhf',
                                     split=split,
                                     cache_dir=cache_dir)
     print('done')
