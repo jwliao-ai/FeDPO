@@ -42,7 +42,7 @@ class FedAvgAPI:
 
     def _setup_clients(self, local_train_data: list[dict], test_data: dict, config: DictConfig, policy: nn.Module):
         print("-"*20 + " Setup clients (START) " + "-"*20)
-        for client_idx in range(self.config.client_num_in_total):
+        for client_idx in range(config.client_num_in_total):
             c = Client(client_idx, local_train_data[client_idx], test_data, config, copy.deepcopy(policy))
             self.client_list.append(c)
         print("-"*20 + " Setup clients (END) " + "-"*20)
