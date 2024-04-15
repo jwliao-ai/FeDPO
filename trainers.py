@@ -520,13 +520,10 @@ class FSDPTrainer(BasicTrainer):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 decay: float,
                  logger_dir: str,
                  client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
-                 seed: int,
-                 run_dir: str,
                  dataset: Dict,
                  reference_model: Optional[nn.Module] = None,
                  rank: int = 0,
@@ -537,10 +534,11 @@ class FSDPTrainer(BasicTrainer):
            Models are sharded at the block level, where the block class name is provided in the config.
         """
 
-        super().__init__(batch_counter, example_counter, decay, logger_dir, client_idx, policy, config, seed, run_dir, dataset,
+        super().__init__(batch_counter, example_counter, logger_dir, client_idx, policy, config, dataset,
                          reference_model, rank, world_size)
         assert config.model.block_name is not None, 'must specify model.block_name (e.g., GPT2Block or GPTNeoXLayer) for FSDP'
         
+        server_policy = copy.deepcopy(policy)
         wrap_class = get_block_class_from_model(policy, config.model.block_name)
         model_auto_wrap_policy = functools.partial(transformer_auto_wrap_policy, transformer_layer_cls={wrap_class})
 
@@ -563,6 +561,8 @@ class FSDPTrainer(BasicTrainer):
         self.policy = FSDP(policy,
                            **shared_fsdp_kwargs,
                            mixed_precision=policy_mp_policy)
+        
+        self.server_policy = FSDP(server_policy, **shared_fsdp_kwargs)
 
         if config.activation_checkpointing:
             rank0_print('Attempting to enable activation checkpointing...')

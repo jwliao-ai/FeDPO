@@ -11,7 +11,7 @@ from fedavg_api import FedAvgAPI
 from omegaconf import OmegaConf, DictConfig
 from typing import Set
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1,3,4,5,7'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
 
 OmegaConf.register_new_resolver(
     "get_local_run_dir",
