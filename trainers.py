@@ -31,6 +31,7 @@ import numpy as np
 import tqdm
 import random
 import os
+import copy
 from collections import defaultdict
 import time
 import functools
@@ -147,13 +148,10 @@ class BasicTrainer(object):
     def __init__(self,
                  batch_counter: int,
                  example_counter: int,
-                 decay: float,
                  logger_dir: str,
                  client_idx: int,
                  policy: nn.Module,
                  config: DictConfig,
-                 seed: int,
-                 run_dir: str,
                  dataset: Dict,
                  reference_model: Optional[nn.Module] = None,
                  rank: int = 0,
@@ -167,13 +165,17 @@ class BasicTrainer(object):
         self.batch_counter = batch_counter
         self.logger = SummaryWriter(logger_dir, flush_secs=1, max_queue=1)
         self.client_idx = client_idx
-        self.seed = seed
         self.rank = rank
         self.world_size = world_size
         self.config = config
-        self.run_dir = run_dir
+        if client_idx == 999:
+            self.decay = 1.0
+        else:
+            self.decay = config.decay_rate
+        self.alpha = config.alpha
+        self.seed = config.seed
+        self.run_dir = config.local_run_dir
         self.dataset = dataset
-        self.decay = decay
 
         tokenizer_name_or_path = config.model.tokenizer_name_or_path or config.model.name_or_path
         rank0_print(f'Loading tokenizer {tokenizer_name_or_path}')
@@ -191,6 +193,8 @@ class BasicTrainer(object):
         )
 
         self.policy = policy
+        self.server_policy = copy.deepcopy(policy)
+        self.server_policy.eval()
         self.reference_model = reference_model
 
         self.train_iterator = get_batch_iterator(**data_iterator_kwargs,
@@ -430,7 +434,13 @@ class BasicTrainer(object):
                 global_microbatch = slice_and_move_batch_for_device(batch, microbatch_idx, self.config.gradient_accumulation_steps, self.rank)
                 local_microbatch = slice_and_move_batch_for_device(global_microbatch, self.rank, self.world_size, self.rank)
                 loss, metrics = self.get_batch_metrics(local_microbatch, self.config.loss, train=True)
-                loss = loss * self.decay
+                policy_chosen_logps, policy_rejected_logps = self.concatenated_forward(self.policy, local_microbatch)
+                server_chosen_logps, server_rejected_logps = self.concatenated_forward(self.server_policy, local_microbatch)
+                server_chosen_logps.detach()
+                server_rejected_logps.detach()
+                loss = loss * self.decay \
+                    + self.alpha * (F.mse_loss(policy_chosen_logps, server_chosen_logps) \
+                                    + F.mse_loss(policy_rejected_logps, server_rejected_logps))
                 (loss / self.config.gradient_accumulation_steps).backward()
 
                 for k, v in metrics.items():

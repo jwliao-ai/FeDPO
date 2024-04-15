@@ -12,7 +12,7 @@ from tensorboardX import SummaryWriter
 class FedAvgAPI:
 
     def __init__(self, 
-                 local_train_data: list[dict], 
+                 local_train_data: "list[dict]", 
                  global_train_data: dict, 
                  test_data: dict, 
                  config: DictConfig, 
@@ -34,7 +34,7 @@ class FedAvgAPI:
         self.logger = SummaryWriter(self.logger_dir, flush_secs=1, max_queue=1)
         
 
-    def _setup_clients(self, local_train_data: list[dict], test_data: dict, config: DictConfig, policy: nn.Module):
+    def _setup_clients(self, local_train_data: "list[dict]", test_data: dict, config: DictConfig, policy: nn.Module):
         print("-"*20 + " Setup clients (START) " + "-"*20)
         for client_idx in range(config.client_num_in_total):
             c = Client(client_idx, local_train_data[client_idx], test_data, config, copy.deepcopy(policy))
@@ -52,9 +52,9 @@ class FedAvgAPI:
 
         for round_idx in range(self.comm_round):
 
-            logging.info("-"*62)
+            logging.info("-"*60)
             logging.info("-"*20 + f" Communication Round {round_idx} " + "-"*20)
-            logging.info("-"*62)
+            logging.info("-"*60)
                         
             if round_idx == self.comm_round - 1:
                 self._global_test(round_idx)
@@ -71,7 +71,7 @@ class FedAvgAPI:
                 print(f"Client {client.client_idx} has {client.train_sample_num} samples for traininig...")
                 client.train(self.server.acc, self.reference_model)
                 print("-"*20 + f" Round {round_idx}: Client {client.client_idx} training (END) " + "-"*20)
-                logging.info("-"*20 + f" Round {round_idx}： Accuracy of client {client.client_idx}: {client.acc}" + "-"*20)
+                logging.info("-"*20 + f" Round {round_idx}: Accuracy of client {client.client_idx}: {client.acc}" + "-"*20)
                 w_locals.append(client.get_policy_params())
                 client_accs.append(client.acc)
                 ratios.append(np.exp(self.temp * client.acc))

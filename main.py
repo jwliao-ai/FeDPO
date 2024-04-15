@@ -11,6 +11,8 @@ from fedavg_api import FedAvgAPI
 from omegaconf import OmegaConf, DictConfig
 from typing import Set
 
+os.environ['CUDA_VISIBLE_DEVICES'] = '1,3,4,5,7'
+
 OmegaConf.register_new_resolver(
     "get_local_run_dir",
     lambda exp_name, local_dirs: get_local_run_dir(exp_name, local_dirs))
@@ -100,7 +102,7 @@ def main(config: DictConfig):
         cache_dir=get_local_dir(config.local_dirs),
         client_num_in_total=config.client_num_in_total,
         data_evenly_distributed=config.data_evenly_distributed,
-        use_small_dataset=config.use_small_dataset
+        use_small_dataset=False
         )
 
     fedavgAPI = FedAvgAPI(local_train_data, global_train_data, test_data, config, policy, reference_model)

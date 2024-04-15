@@ -4,6 +4,9 @@ decay_rate: 0.995
 # weights entropy regularization temperature
 temp: 0.1
 
+# the weight of L2 regularization
+alpha: 1.0
+
 # use small (1/10) datasets
 use_small_dataset: False
 

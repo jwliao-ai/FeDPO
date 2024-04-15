@@ -57,15 +57,12 @@ class Server:
         print(f'Creating trainer on process {rank} with world size {world_size}')
 
         TrainerClass = getattr(trainers, self.config.trainer)
-        trainer = TrainerClass(0,
-                               0,
-                               1.0,
-                               self.logger_dir,
-                               self.server_idx,
-                               self.policy,
-                               self.config,
-                               self.config.seed,
-                               self.config.local_run_dir,
+        trainer = TrainerClass(batch_counter=0,
+                               example_counter=0,
+                               logger_dir=self.logger_dir,
+                               client_idx=self.server_idx,
+                               policy=self.policy,
+                               config=self.config,
                                dataset=self.data,
                                reference_model=reference_model,
                                rank=rank,

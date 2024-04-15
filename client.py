@@ -16,7 +16,7 @@ class Client:
                  local_train_data: dict, 
                  local_eval_data: dict, 
                  config: DictConfig,
-                 policy: nn.Module
+                 policy: nn.Module,
                  ):
         
         self.client_idx = client_idx
@@ -73,15 +73,12 @@ class Client:
         print(f'Creating trainer on process {rank} with world size {world_size}')
 
         TrainerClass = getattr(trainers, self.config.trainer)
-        trainer = TrainerClass(self.batch_counter,
-                               self.example_counter,
-                               self.decay,
-                               self.logger_dir,
-                               self.client_idx,
-                               self.policy,
-                               self.config,
-                               self.config.seed,
-                               self.config.local_run_dir,
+        trainer = TrainerClass(batch_counter=self.batch_counter,
+                               example_counter=self.example_counter,
+                               logger_dir=self.logger_dir,
+                               client_idx=self.client_idx,
+                               policy=self.policy,
+                               config=self.config,
                                dataset=self.data,
                                reference_model=reference_model,
                                rank=rank,

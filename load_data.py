@@ -54,8 +54,8 @@ def get_se(
        We strip the HTML tags from the responses (except for <code> tags), and we add necessary newlines.
     """
 
-    print(f'Loading SE dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('HuggingFaceH4/stack-exchange-preferences', cache_dir=cache_dir)['train']
+    print(f'Loading SE dataset ({split} split) from local cache...')
+    dataset = datasets.load_dataset('./datasets/stack-and-exchange', cache_dir=cache_dir)['train']
     print('done')
 
     # shuffle the dataset and select 1% for test
@@ -101,8 +101,8 @@ def get_shp(
        For this dataset, the sft_target is the response with the highest score.
     """
 
-    print(f'Loading SHP dataset ({split} split) from Local...')
-    dataset = datasets.load_dataset('stanfordnlp/SHP', split=split, cache_dir=cache_dir)
+    print(f'Loading SHP dataset ({split} split) from Local cache...')
+    dataset = datasets.load_dataset('./datasets/SHP', split=split, cache_dir=cache_dir)
     print('done')
 
     data = defaultdict(lambda: defaultdict(list))
@@ -160,8 +160,8 @@ def get_hh(
        For this dataset, the sft_target is just the chosen response.
     """
 
-    print(f'Loading HH dataset ({split} split) from Huggingface...')
-    dataset = datasets.load_dataset('Anthropic/hh-rlhf',
+    print(f'Loading HH dataset ({split} split) from local cache...')
+    dataset = datasets.load_dataset('./datasets/hh-rlhf',
                                     split=split,
                                     cache_dir=cache_dir)
     print('done')
@@ -185,7 +185,7 @@ def get_hh(
     return data
 
 
-def get_dataset(name_list: list[str],
+def get_dataset(name_list: "list[str]",
                 split: str,
                 silent: bool = False,
                 cache_dir: str = None,
@@ -209,11 +209,6 @@ def get_dataset(name_list: list[str],
             
             assert set(list(data.values())[0].keys()) == {'responses', 'pairs', 'sft_target', 'truncation_mode'}, \
                 f"Unexpected keys in dataset: {list(list(data.values())[0].keys())}"
-
-            if use_small_dataset:
-                total_keys = len(data) // 10
-                keys = list(data.keys())[0: total_keys]
-                data = {key: data[key] for key in keys}
             
             test_dataset.update(data)
 
@@ -241,7 +236,7 @@ def get_dataset(name_list: list[str],
             
             if use_small_dataset:
                 total_keys = total_keys // 10
-                keys = keys[0: total_keys]
+                keys = random.sample(keys, total_keys)
                 data = {key: data[key] for key in keys}
 
             if data_evenly_distributed == True:
